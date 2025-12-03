@@ -1,6 +1,10 @@
 // lib/ui/my_resep_page.dart
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
+import '../models/recipe_model.dart';
+import '../widgets/card_recipe.dart';
 import 'tambah_resep_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MyResepPage extends StatefulWidget {
   const MyResepPage({super.key});
@@ -10,27 +14,46 @@ class MyResepPage extends StatefulWidget {
 }
 
 class _MyResepPageState extends State<MyResepPage> {
-  // Dummy data resep yang dibuat sendiri
-  final List<Map<String, dynamic>> _myRecipes = [
-    {
-      'id': 1,
-      'title': 'Nasi Goreng Spesial',
-      'description': 'Nasi goreng dengan bumbu rahasia keluarga',
-      'image': 'https://picsum.photos/id/201/200',
-      'rating': 4.8,
-      'time': '30 min',
-      'difficulty': 'Mudah',
-    },
-    {
-      'id': 2,
-      'title': 'Soto Ayam Lamongan',
-      'description': 'Soto ayam dengan koya khas Lamongan',
-      'image': 'https://picsum.photos/id/202/200',
-      'rating': 4.9,
-      'time': '45 min',
-      'difficulty': 'Sedang',
-    },
-  ];
+  final ApiService api = ApiService();
+  List<RecipeModel> _myRecipes = [];
+  bool _loading = true;
+  String? _error;
+  int? _userId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserAndFetch();
+  }
+
+  Future<void> _loadUserAndFetch() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _userId = prefs.getInt('userId'); // pastikan login menyimpan userId
+      List<RecipeModel> data;
+      if (_userId != null) {
+        data = await api.fetchUserRecipes(_userId!);
+      } else {
+        // fallback ambil semua
+        data = await api.fetchRecipes();
+      }
+
+      setState(() {
+        _myRecipes = data;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
 
   void _navigateToTambahResep() async {
     final result = await Navigator.push(
@@ -38,270 +61,189 @@ class _MyResepPageState extends State<MyResepPage> {
       MaterialPageRoute(builder: (context) => const TambahResepPage()),
     );
 
-    // Jika ada resep baru yang ditambahkan
-    if (result != null && result is Map<String, dynamic>) {
-      setState(() {
-        _myRecipes.insert(0, result);
-      });
+    // jika TambahResepPage mengembalikan true/nilai sukses, refetch
+    if (result == true) {
+      await _loadUserAndFetch();
     }
   }
 
-  void _deleteRecipe(int id) {
-    setState(() {
-      _myRecipes.removeWhere((recipe) => recipe['id'] == id);
-    });
+  Future<void> _deleteRecipe(int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Hapus Resep'),
+        content: const Text('Apakah Anda yakin ingin menghapus resep ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Hapus', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // coba hapus via API
+    try {
+      final ok = await api.deleteRecipe(id);
+      if (ok) {
+        setState(() {
+          _myRecipes.removeWhere((r) => r.id == id);
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Resep dihapus')));
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Gagal menghapus resep')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        title: const Text('Resep Saya'),
         backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
         elevation: 0,
-        title: const Text(
-          "Resep Saya",
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add, color: Colors.deepOrange),
             onPressed: _navigateToTambahResep,
-            tooltip: 'Tambah Resep',
           ),
         ],
       ),
-      body: _myRecipes.isEmpty ? _buildEmptyState() : _buildRecipeList(),
+      body: RefreshIndicator(
+        onRefresh: _loadUserAndFetch,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+            ? ListView(
+                // wrap supaya pull-to-refresh tetap bekerja
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        Text('Terjadi kesalahan: $_error'),
+                        const SizedBox(height: 12),
+                        ElevatedButton(
+                          onPressed: _loadUserAndFetch,
+                          child: const Text('Coba lagi'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : _myRecipes.isEmpty
+            ? ListView(
+                children: [
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height - 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.menu_book,
+                            size: 80,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 20),
+                          const Text('Belum ada resep'),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            onPressed: _navigateToTambahResep,
+                            child: const Text('Tambah Resep'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _myRecipes.length,
+                itemBuilder: (context, index) {
+                  final r = _myRecipes[index];
+
+                  // Bangun imageUrl: jika image hanya nama file, gabungkan base url
+                  String imageUrl = r.image ?? '';
+                  if (imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
+                    imageUrl = '${api.baseUrl}/uploads/recipes/$imageUrl';
+                  } else if (imageUrl.isEmpty) {
+                    imageUrl = 'https://picsum.photos/200'; // fallback
+                  }
+
+                  return GestureDetector(
+                    onTap: () {
+                      // TODO: buka detail halaman resep
+                    },
+                    child: Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ListTile(
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            imageUrl,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        title: Text(
+                          r.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          r.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (val) async {
+                            if (val == 'edit') {
+                              // TODO: navigasi edit
+                            } else if (val == 'delete') {
+                              await _deleteRecipe(r.id);
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Text('Edit'),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Hapus'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToTambahResep,
         backgroundColor: Colors.deepOrange,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.menu_book, size: 80, color: Colors.grey.shade300),
-          const SizedBox(height: 20),
-          Text(
-            "Belum ada resep",
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Tambahkan resep pertama Anda",
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: _navigateToTambahResep,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepOrange,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text(
-              "Tambah Resep",
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecipeList() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header dengan jumlah resep
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Text(
-              "${_myRecipes.length} Resep Dibuat",
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.black54,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-
-          // List resep
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _myRecipes.length,
-            itemBuilder: (context, index) {
-              final recipe = _myRecipes[index];
-              return _buildRecipeCard(recipe);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecipeCard(Map<String, dynamic> recipe) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Stack(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Gambar resep
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    recipe['image'],
-                    width: 80,
-                    height: 80,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Info resep
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        recipe['title'],
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        recipe['description'],
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Meta info
-                      Row(
-                        children: [
-                          _buildMetaInfo(Icons.schedule, recipe['time']),
-                          const SizedBox(width: 12),
-                          _buildMetaInfo(Icons.star, '${recipe['rating']}'),
-                          const SizedBox(width: 12),
-                          _buildMetaInfo(Icons.flag, recipe['difficulty']),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Tombol delete
-          Positioned(
-            top: 8,
-            right: 8,
-            child: IconButton(
-              icon: const Icon(Icons.more_vert, size: 20),
-              onPressed: () {
-                _showRecipeOptions(recipe['id']);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetaInfo(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: Colors.deepOrange),
-        const SizedBox(width: 4),
-        Text(text, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-      ],
-    );
-  }
-
-  void _showRecipeOptions(int recipeId) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.edit, color: Colors.blue),
-                title: const Text('Edit Resep'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Implement edit functionality
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
-                title: const Text('Hapus Resep'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showDeleteConfirmation(recipeId);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showDeleteConfirmation(int recipeId) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hapus Resep'),
-        content: const Text('Apakah Anda yakin ingin menghapus resep ini?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _deleteRecipe(recipeId);
-            },
-            child: const Text('Hapus', style: TextStyle(color: Colors.red)),
-          ),
-        ],
+        child: const Icon(Icons.add),
       ),
     );
   }

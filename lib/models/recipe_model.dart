@@ -6,7 +6,7 @@ class RecipeModel {
   final String ingredients;
   final String steps;
   final String description;
-  final String image;
+  final String? image;
   final String time;
   final String difficulty;
   final String author;

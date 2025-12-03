@@ -23,6 +23,7 @@ class ApiService {
       ? "http://localhost:8080"
       : "http://10.0.2.2:8080";
   // final String _baseUrl = "http://10.0.2.2:8080";
+  String get baseUrl => _baseUrl;
 
   // ✅ Helper function untuk header
   Future<Map<String, String>> _getAuthHeaders() async {
@@ -141,23 +142,6 @@ class ApiService {
     return jsonDecode(result);
   }
 
-  // 3️⃣ AMBIL DATA RESEP
-  Future<List<RecipeModel>> fetchRecipes() async {
-    final response = await http.get(
-      Uri.parse('$_baseUrl/resep'),
-      headers: await _getAuthHeaders(),
-    );
-
-    if (response.statusCode == 200) {
-      List<dynamic> jsonList = jsonDecode(response.body);
-      return jsonList.map((json) => RecipeModel.fromJson(json)).toList();
-    } else if (response.statusCode == 401) {
-      throw TokenExpiredException();
-    } else {
-      throw Exception('Gagal memuat resep, status: ${response.statusCode}');
-    }
-  }
-
   // 4️⃣ UPLOAD DATA RESEP + IMAGE
   Future<Map<String, dynamic>> postRecipe(
     Map<String, dynamic> data,
@@ -205,6 +189,76 @@ class ApiService {
     } catch (e) {
       // Menangkap error umum lainnya
       throw Exception('Terjadi Kesalahan Tak Terduga: $e');
+    }
+  }
+
+  // di ApiService class
+
+  // ambil semua resep — lebih forgiving terhadap format response
+  Future<List<RecipeModel>> fetchRecipes() async {
+    final response = await http.get(
+      Uri.parse('$_baseUrl/resep'),
+      headers: await _getAuthHeaders(),
+    );
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+      List<dynamic> listData;
+
+      // jika backend merespon { status: true, data: [...] }
+      if (body is Map && body.containsKey('data')) {
+        listData = body['data'];
+      } else if (body is List) {
+        listData = body;
+      } else {
+        throw Exception('Format response tidak dikenali');
+      }
+
+      return listData.map((json) => RecipeModel.fromJson(json)).toList();
+    } else if (response.statusCode == 401) {
+      throw TokenExpiredException();
+    } else {
+      throw Exception('Gagal memuat resep, status: ${response.statusCode}');
+    }
+  }
+
+  // ambil resep milik user berdasarkan id
+  Future<List<RecipeModel>> fetchUserRecipes(int userId) async {
+    final response = await http.get(
+      Uri.parse('$_baseUrl/resep/user/$userId'),
+      headers: await _getAuthHeaders(),
+    );
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+      List<dynamic> listData;
+      if (body is Map && body.containsKey('data')) {
+        listData = body['data'];
+      } else if (body is List) {
+        listData = body;
+      } else {
+        listData = body;
+      }
+      return listData.map((json) => RecipeModel.fromJson(json)).toList();
+    } else if (response.statusCode == 401) {
+      throw TokenExpiredException();
+    } else {
+      throw Exception(
+        'Gagal memuat resep user, status: ${response.statusCode}',
+      );
+    }
+  }
+
+  // contoh delete (pastikan route di backend tersedia: DELETE /recipes/{id} atau /resep/{id})
+  Future<bool> deleteRecipe(int id) async {
+    final uri = Uri.parse('$_baseUrl/recipes/$id'); // sesuaikan route backend
+    final response = await http.delete(uri, headers: await _getAuthHeaders());
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return true;
+    } else if (response.statusCode == 401) {
+      throw TokenExpiredException();
+    } else {
+      return false;
     }
   }
 }
