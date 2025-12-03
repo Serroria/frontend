@@ -148,7 +148,7 @@ class ApiService {
     File? imageFile,
   ) async {
     // ✅ Endponit baru yang sesuai dengan routes.php: /recipes/create
-    var uri = Uri.parse('$_baseUrl/recipes/create');
+    var uri = Uri.parse('$_baseUrl/resep/create');
     var request = http.MultipartRequest('POST', uri);
 
     // request.headers.addAll(await _getAuthHeaders());

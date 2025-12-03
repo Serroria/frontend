@@ -4,7 +4,7 @@ class RecipeCard extends StatelessWidget {
   final String imageUrl;
   final String title;
   final String rating;
-  final int steps;
+  // final int steps;
   final String kategori;
   final String difficulty;
   final String author;
@@ -14,7 +14,7 @@ class RecipeCard extends StatelessWidget {
     required this.imageUrl,
     required this.title,
     required this.rating,
-    required this.steps,
+    // required this.steps,
     required this.kategori,
     required this.difficulty,
     required this.author,
@@ -80,12 +80,12 @@ class RecipeCard extends StatelessWidget {
                     SizedBox(height: 8),
                     Icon(Icons.timer, color: Colors.grey, size: 14),
                     SizedBox(width: 4),
-                    Text(
-                      '$steps langkah',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                    Spacer(),
 
+                    // Text(
+                    //   '$steps langkah',
+                    //   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    // ),
+                    // Spacer(),
                     Spacer(), // Mendorong widget berikutnya ke kanan
                     Icon(Icons.bookmark_border, color: Colors.grey, size: 20),
                   ],

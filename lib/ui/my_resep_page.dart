@@ -5,6 +5,7 @@ import '../models/recipe_model.dart';
 import '../widgets/card_recipe.dart';
 import 'tambah_resep_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../ui/detail_resep.dart';
 
 class MyResepPage extends StatefulWidget {
   const MyResepPage({super.key});
@@ -66,6 +67,32 @@ class _MyResepPageState extends State<MyResepPage> {
     if (result == true) {
       await _loadUserAndFetch();
     }
+  }
+
+  void _navigateToDetailResep(RecipeModel resep) {
+    String finalImageUrl = resep.image ?? '';
+    if (finalImageUrl.isNotEmpty && !finalImageUrl.startsWith('http')) {
+      finalImageUrl = '${api.baseUrl}/uploads/receipes/${finalImageUrl}';
+    }
+
+    final resepFinal = RecipeModel(
+      id: resep.id,
+      title: resep.title,
+      kategori: resep.kategori,
+      rating: resep.rating,
+      ingredients: resep.ingredients,
+      steps: resep.steps,
+      description: resep.description,
+      image: finalImageUrl, // Kirim URL gambar yang sudah lengkap
+      time: resep.time,
+      difficulty: resep.difficulty,
+      author: resep.author,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => DetailResep(resep: resepFinal)),
+    );
   }
 
   Future<void> _deleteRecipe(int id) async {
@@ -201,38 +228,46 @@ class _MyResepPageState extends State<MyResepPage> {
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      leading: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          imageUrl,
-                          width: 64,
-                          height: 64,
-                          fit: BoxFit.cover,
+                    child: InkWell(
+                      onTap: () {
+                        _navigateToDetailResep(r);
+                      },
+                      child: ListTile(
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            imageUrl,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                      ),
-                      title: Text(
-                        r.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        r.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (val) async {
-                          if (val == 'edit') {
-                            // TODO: Navigasi edit resep
-                          } else if (val == 'delete') {
-                            await _deleteRecipe(r.id);
-                          }
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'edit', child: Text('Edit')),
-                          PopupMenuItem(value: 'delete', child: Text('Hapus')),
-                        ],
+                        title: Text(
+                          r.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          r.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (val) async {
+                            if (val == 'edit') {
+                              // TODO: Navigasi edit resep
+                            } else if (val == 'delete') {
+                              await _deleteRecipe(r.id);
+                            }
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: 'edit', child: Text('Edit')),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Hapus'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
