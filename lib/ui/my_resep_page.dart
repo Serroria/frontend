@@ -27,27 +27,29 @@ class _MyResepPageState extends State<MyResepPage> {
   }
 
   Future<void> _loadUserAndFetch() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      _userId = prefs.getInt('userId'); // pastikan login menyimpan userId
-      List<RecipeModel> data;
-      if (_userId != null) {
-        data = await api.fetchUserRecipes(_userId!);
-      } else {
-        // fallback ambil semua
-        data = await api.fetchRecipes();
-      }
+      final uid = prefs.getInt('userId');
+      _userId = uid;
 
+      List<RecipeModel> data = uid != null
+          ? await api.fetchUserRecipes(uid)
+          : await api.fetchRecipes();
+
+      if (!mounted) return;
       setState(() {
         _myRecipes = data;
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -61,7 +63,6 @@ class _MyResepPageState extends State<MyResepPage> {
       MaterialPageRoute(builder: (context) => const TambahResepPage()),
     );
 
-    // jika TambahResepPage mengembalikan true/nilai sukses, refetch
     if (result == true) {
       await _loadUserAndFetch();
     }
@@ -88,9 +89,10 @@ class _MyResepPageState extends State<MyResepPage> {
 
     if (confirmed != true) return;
 
-    // coba hapus via API
     try {
       final ok = await api.deleteRecipe(id);
+      if (!mounted) return;
+
       if (ok) {
         setState(() {
           _myRecipes.removeWhere((r) => r.id == id);
@@ -104,6 +106,7 @@ class _MyResepPageState extends State<MyResepPage> {
         ).showSnackBar(const SnackBar(content: Text('Gagal menghapus resep')));
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -125,19 +128,24 @@ class _MyResepPageState extends State<MyResepPage> {
           ),
         ],
       ),
+
+      // --- BODY ---
       body: RefreshIndicator(
         onRefresh: _loadUserAndFetch,
         child: _loading
             ? const Center(child: CircularProgressIndicator())
+            // Error state
             : _error != null
             ? ListView(
-                // wrap supaya pull-to-refresh tetap bekerja
                 children: [
                   Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       children: [
-                        Text('Terjadi kesalahan: $_error'),
+                        Text(
+                          'Terjadi kesalahan: $_error',
+                          textAlign: TextAlign.center,
+                        ),
                         const SizedBox(height: 12),
                         ElevatedButton(
                           onPressed: _loadUserAndFetch,
@@ -148,6 +156,7 @@ class _MyResepPageState extends State<MyResepPage> {
                   ),
                 ],
               )
+            // Empty state
             : _myRecipes.isEmpty
             ? ListView(
                 children: [
@@ -175,71 +184,62 @@ class _MyResepPageState extends State<MyResepPage> {
                   ),
                 ],
               )
+            // List data
             : ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: _myRecipes.length,
                 itemBuilder: (context, index) {
                   final r = _myRecipes[index];
 
-                  // Bangun imageUrl: jika image hanya nama file, gabungkan base url
+                  // --- Build image url ---
                   String imageUrl = r.image ?? '';
                   if (imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
                     imageUrl = '${api.baseUrl}/uploads/recipes/$imageUrl';
                   } else if (imageUrl.isEmpty) {
-                    imageUrl = 'https://picsum.photos/200'; // fallback
+                    imageUrl = 'https://picsum.photos/200';
                   }
 
-                  return GestureDetector(
-                    onTap: () {
-                      // TODO: buka detail halaman resep
-                    },
-                    child: Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            imageUrl,
-                            width: 64,
-                            height: 64,
-                            fit: BoxFit.cover,
-                          ),
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          imageUrl,
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
                         ),
-                        title: Text(
-                          r.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          r.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (val) async {
-                            if (val == 'edit') {
-                              // TODO: navigasi edit
-                            } else if (val == 'delete') {
-                              await _deleteRecipe(r.id);
-                            }
-                          },
-                          itemBuilder: (_) => [
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Text('Edit'),
-                            ),
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Text('Hapus'),
-                            ),
-                          ],
-                        ),
+                      ),
+                      title: Text(
+                        r.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        r.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (val) async {
+                          if (val == 'edit') {
+                            // TODO: Navigasi edit resep
+                          } else if (val == 'delete') {
+                            await _deleteRecipe(r.id);
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'edit', child: Text('Edit')),
+                          PopupMenuItem(value: 'delete', child: Text('Hapus')),
+                        ],
                       ),
                     ),
                   );
                 },
               ),
       ),
+
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToTambahResep,
         backgroundColor: Colors.deepOrange,

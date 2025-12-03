@@ -151,7 +151,7 @@ class ApiService {
     var uri = Uri.parse('$_baseUrl/recipes/create');
     var request = http.MultipartRequest('POST', uri);
 
-    request.headers.addAll(await _getAuthHeaders());
+    // request.headers.addAll(await _getAuthHeaders());
     data.forEach((key, value) {
       request.fields[key] = value.toString();
     });
@@ -162,12 +162,11 @@ class ApiService {
       );
     }
     try {
-      var response = await request.send().timeout(
-        const Duration(seconds: 60),
-      ); // 👈 Coba beri batas waktu 30 detik
+      var response = await request.send().timeout(const Duration(seconds: 60));
+      // 👈 Coba beri batas waktu 30 detik
       var responseBody = await response.stream.bytesToString();
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(responseBody);
       } else if (response.statusCode == 401) {
         throw TokenExpiredException();

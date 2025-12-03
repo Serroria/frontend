@@ -66,7 +66,7 @@ class _HalamanResepState extends State<HalamanResep> {
                     kategori: recipe.kategori,
                     rating: recipe.rating
                         .toString(), // Convert to String if rating is a number
-                    steps: int.parse(recipe.steps),
+                    steps: int.tryParse(recipe.steps) ?? 0,
                     difficulty: recipe.difficulty,
                     author: recipe.author,
                   );
