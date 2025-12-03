@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'edit_profile_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -21,7 +22,12 @@ class ProfilePage extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () {
-                // Navigate to edit profile page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const EditProfilePage(),
+                  ),
+                );
               },
               child: const Text(
                 "Edit",
@@ -99,7 +105,7 @@ class ProfilePage extends StatelessWidget {
                 ),
                 indicatorWeight: 2,
                 tabs: const [
-                  Tab(text: "Resep Saya"),
+                  Tab(text: "Resep Saya!!!"),
                   Tab(text: "Resep Disimpan"),
                 ],
               ),
