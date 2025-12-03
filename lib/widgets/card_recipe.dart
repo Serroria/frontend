@@ -47,10 +47,27 @@ class RecipeCard extends StatelessWidget {
               topRight: Radius.circular(10),
             ),
             child: Image.network(
-              imageUrl,
+              imageUrl.isNotEmpty
+                  ? imageUrl
+                  : 'https://via.placeholder.com/200x200?text=No+Image', // URL placeholder jika kosong
               height: cardWidth,
               width: cardWidth,
               fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                // Jika URL jaringan gagal, atau URL-nya "file:///", tampilkan ikon
+                return Container(
+                  height: cardWidth,
+                  width: cardWidth,
+                  color: Colors.grey[200],
+                  child: Center(
+                    child: Icon(
+                      Icons.fastfood,
+                      color: Colors.grey[500],
+                      size: 40,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
 

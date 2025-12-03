@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../widgets/card_recipe.dart';
 import '../services/api_service.dart';
 import '../models/recipe_model.dart';
+import './detail_resep.dart';
+import '../services/the_meal_db_service.dart';
 
 class HalamanResep extends StatefulWidget {
   const HalamanResep({super.key});
@@ -12,11 +14,49 @@ class HalamanResep extends StatefulWidget {
 
 class _HalamanResepState extends State<HalamanResep> {
   late Future<List<RecipeModel>> _futureRecipes;
+  final ApiService apiService = ApiService();
+  final TheMealDbService dbApiService = TheMealDbService();
 
   @override
   void initState() {
     super.initState();
-    _futureRecipes = ApiService().fetchRecipes();
+    _futureRecipes = _fetchAndMergeRecipes();
+  }
+
+  // lib/ui/halaman_resep.dart (di dalam class _HalamanResepState)
+
+  Future<List<RecipeModel>> _fetchAndMergeRecipes() async {
+    List<RecipeModel> combinedRecipes = [];
+    // Kita akan ambil semua resep lokal, dan beberapa resep dari TheMealDB
+    // Contoh: Ambil resep dari kategori "Seafood" di TheMealDB
+
+    try {
+      final localRecipes = await apiService.fetchRecipes();
+      combinedRecipes.addAll(localRecipes);
+    } catch (e) {
+      // 💡 Tampilkan peringatan, tapi JANGAN GAGAL TOTAL
+      debugPrint('Peringatan: Gagal memuat resep lokal: $e');
+    }
+
+    // Panggilan API 2: Eksternal (TheMealDB)
+    try {
+      final externalRecipes = await dbApiService.fetchFilteredRecipes(
+        'c',
+        'Seafood',
+      );
+      combinedRecipes.addAll(externalRecipes);
+    } catch (e) {
+      // 💡 Tampilkan peringatan, tapi JANGAN GAGAL TOTAL
+      debugPrint('Peringatan: Gagal memuat resep eksternal: $e');
+    }
+
+    // Jika kedua API gagal
+    if (combinedRecipes.isEmpty) {
+      throw Exception('Gagal memuat semua resep dari kedua sumber.');
+    }
+
+    // Gabungkan dan kembalikan resep yang berhasil dimuat
+    return combinedRecipes;
   }
 
   @override
@@ -57,18 +97,49 @@ class _HalamanResepState extends State<HalamanResep> {
                 ),
                 itemBuilder: (context, index) {
                   final recipe = recipes[index];
-
+                  final isExternal = recipe.author == 'TheMealDB';
                   // Meneruskan data dari Model ke Partial Card
-                  return RecipeCard(
-                    // Ganti dengan nama widget Card Anda
-                    imageUrl: recipe.image ?? '',
-                    title: recipe.title,
-                    kategori: recipe.kategori,
-                    rating: recipe.rating
-                        .toString(), // Convert to String if rating is a number
-                    // steps: int.tryParse(recipe.steps) ?? 0,
-                    difficulty: recipe.difficulty,
-                    author: recipe.author,
+                  return GestureDetector(
+                    onTap: () async {
+                      if (isExternal) {
+                        // Jika dari TheMealDB, fetch detail lengkap sebelum navigasi
+                        final detail = await dbApiService.lookupMealDetail(
+                          recipe.id.toString(),
+                        );
+                        if (detail != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => DetailResep(resep: detail),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Detail resep eksternal gagal dimuat',
+                              ),
+                            ),
+                          );
+                        }
+                      } else {
+                        // Jika resep lokal CI4, langsung navigasi (data sudah lengkap)
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => DetailResep(resep: recipe),
+                          ),
+                        );
+                      }
+                    },
+                    child: RecipeCard(
+                      imageUrl: recipe.image ?? '',
+                      title: recipe.title,
+                      kategori: recipe.kategori,
+                      rating: recipe.rating.toString(),
+                      difficulty: recipe.difficulty,
+                      author: recipe.author,
+                    ),
                   );
                 },
               ),

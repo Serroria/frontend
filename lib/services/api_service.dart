@@ -260,6 +260,86 @@ class ApiService {
       return false;
     }
   }
+
+  // Fungsi baru untuk mengambil resep terbaru dari CI4
+  Future<List<RecipeModel>> fetchNewestRecipes() async {
+    final response = await http
+        .get(
+          Uri.parse('$_baseUrl/resep/terbaru'), // ✅ Memanggil endpoint baru
+          headers: await _getAuthHeaders(),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+      List<dynamic> listData = body['data'] ?? [];
+
+      return listData.map((json) => RecipeModel.fromJson(json)).toList();
+    } else {
+      throw Exception('Gagal memuat resep terbaru: ${response.statusCode}');
+    }
+  }
+
+  // Fungsi baru untuk mengambil resep populer dari CI4
+  Future<List<RecipeModel>> fetchPopularRecipesCI4() async {
+    final response = await http
+        .get(
+          Uri.parse('$_baseUrl/resep/populer'), // ✅ Memanggil endpoint baru
+          headers: await _getAuthHeaders(),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+      List<dynamic> listData = body['data'] ?? [];
+
+      return listData.map((json) => RecipeModel.fromJson(json)).toList();
+    } else {
+      throw Exception(
+        'Gagal memuat resep populer (CI4): ${response.statusCode}',
+      );
+    }
+  }
+
+  Future<List<RecipeModel>> fetchFilteredLocalRecipes(String kategori) async {
+    final url = Uri.parse('$_baseUrl/resep/kategori/$kategori');
+
+    final response = await http
+        .get(url, headers: await _getAuthHeaders())
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+      List<dynamic> listData = body['data'] ?? [];
+      return listData.map((json) => RecipeModel.fromJson(json)).toList();
+    } else {
+      throw Exception(
+        'Gagal memuat resep berdasarkan kategori: ${response.statusCode}',
+      );
+    }
+  }
+
+  Future<List<RecipeModel>> searchLocalRecipes(String keyword) async {
+    final encodedKeyword = Uri.encodeComponent(
+      keyword,
+    ); // Pastikan keyword di-encode
+    final url = Uri.parse('$_baseUrl/resep/search/$encodedKeyword');
+
+    final response = await http
+        .get(url, headers: await _getAuthHeaders())
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+      List<dynamic> listData = body['data'] ?? [];
+
+      return listData.map((json) => RecipeModel.fromJson(json)).toList();
+    } else {
+      throw Exception(
+        'Gagal melakukan pencarian lokal: ${response.statusCode}',
+      );
+    }
+  }
 }
 
 // Hapus semua kode tambahan setelah ini (misalnya class LoginPage yang tidak relevan dengan ApiService)

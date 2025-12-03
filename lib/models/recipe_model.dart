@@ -65,6 +65,57 @@ class RecipeModel {
           : null, // Ganti "" (string kosong) dengan null jika 'image' adalah String?
     );
   }
+  factory RecipeModel.fromMealDbFilterJson(Map<String, dynamic> json) {
+    return RecipeModel(
+      // Kita hanya punya data minimal dari endpoint filter:
+      id: int.tryParse(json['idMeal']?.toString() ?? '0') ?? 0,
+      title: json['strMeal'] ?? 'Unknown Recipe',
+      image: json['strMealThumb']?.toString(), // Ini URL thumbnail
+      // Beri nilai default untuk field yang tidak ada
+      kategori: 'External',
+      rating: '0',
+      ingredients: '',
+      steps: '',
+      description: '',
+      time: '',
+      difficulty: 'Medium',
+      author: 'TheMealDB',
+    );
+  }
+
+  // Factory untuk data hasil lookup detail
+  factory RecipeModel.fromMealDbDetailJson(Map<String, dynamic> json) {
+    // Ambil instruksi (strInstructions)
+    String instructions = json['strInstructions'] ?? 'Langkah tidak tersedia.';
+
+    // Ambil bahan-bahan (di TheMealDB ini ada di field strIngredient1, strIngredient2, dst)
+    String ingredients = '';
+    for (int i = 1; i <= 20; i++) {
+      final ingredient = json['strIngredient$i'];
+      final measure = json['strMeasure$i'];
+      if (ingredient != null &&
+          ingredient.isNotEmpty &&
+          ingredient.toString().trim().isNotEmpty) {
+        ingredients += '- $ingredient (${measure ?? ''})\n';
+      }
+    }
+
+    return RecipeModel(
+      id: int.tryParse(json['idMeal']?.toString() ?? '0') ?? 0,
+      title: json['strMeal'] ?? 'Unknown Recipe',
+      kategori: json['strCategory'] ?? 'N/A',
+      description: json['strArea'] ?? 'N/A', // Gunakan Area sebagai deskripsi
+      ingredients: ingredients,
+      steps: instructions,
+      time:
+          json['strMeasure']?.toString() ??
+          'N/A', // Ganti dengan waktu jika ada fieldnya
+      difficulty: 'N/A',
+      rating: 'N/A',
+      author: json['strArea'] ?? 'External',
+      image: json['strMealThumb']?.toString(), // Ini URL gambar besar
+    );
+  }
 
   // return RecipeModel(
   //   id: json['id'] ?? 0,

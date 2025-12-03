@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:uasmoba/services/api_service.dart';
+import 'package:uasmoba/services/the_meal_db_service.dart';
+import '../services/the_meal_db_service.dart';
+import 'package:uasmoba/models/recipe_model.dart'; // Tambahkan import model RecipeModel
 // Asumsikan file login_page.dart berada di direktori yang sama
 import 'ui/login_page.dart';
+import 'ui/detail_resep.dart'; // Import DetailResep widget
+// ✅ TAMBAHKAN IMPORT INI
+import 'ui/search_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -10,7 +17,32 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final ApiService api = ApiService();
+  final TheMealDbService dbApi = TheMealDbService();
+  final TextEditingController _searchController = TextEditingController();
+
+  List<RecipeModel> _recommendations = []; //dari TheMealDb
+  List<RecipeModel> _localNewRecipes = []; //dari lokal CI4
+  bool _isLoading = true;
+  String? _error;
   final String _username = "User"; // Nanti diganti saat login dari backend
+
+  String _selectedCategory = 'Dessert';
+
+  //mapping kategori lokal ke kategori THemealdb
+  final Map<String, String> _categoryMap = {
+    'Nusantara': 'Chicken',
+    'Asia': 'Seafood',
+    'Internasional': 'Beef',
+    'Vegan': 'Vegetarian',
+    'Dessert': 'Dessert',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchHomeData();
+  }
 
   // Fungsi untuk menangani logout dan navigasi ke halaman login
   void _handleLogout() {
@@ -20,6 +52,60 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute(builder: (context) => const LoginPage()),
       (Route<dynamic> route) => false,
     );
+  }
+
+  void _onCategoryTap(String categoryTitle) {
+    if (_selectedCategory != categoryTitle) {
+      setState(() {
+        _selectedCategory = categoryTitle;
+        _isLoading = true;
+        _error = null;
+      });
+      _fetchHomeData();
+    }
+  }
+
+  Future<void> _fetchHomeData() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
+
+    final mealDbCategory = _categoryMap[_selectedCategory] ?? 'Dessert';
+    List<RecipeModel> recommendations = [];
+    List<RecipeModel> localFiltered = [];
+    String? tempError;
+
+    // 1. Ambil data rekomendasi (Eksternal)
+    try {
+      recommendations = await dbApi.fetchFilteredRecipes('c', mealDbCategory);
+    } catch (e) {
+      tempError = 'Gagal memuat rekomendasi TheMealDB: $e';
+      debugPrint(tempError);
+    }
+
+    // 2. Ambil data resep filter lokal (CI4)
+    try {
+      localFiltered = await api.fetchFilteredLocalRecipes(_selectedCategory);
+    } catch (e) {
+      tempError = (tempError ?? '') + '\nGagal memuat resep lokal: $e';
+      debugPrint(e.toString());
+    }
+
+    if (mounted) {
+      setState(() {
+        _recommendations = recommendations;
+        // Perbarui _localNewRecipes dengan hasil filter
+        _localNewRecipes = localFiltered;
+        _isLoading = false;
+        // Tetapkan error HANYA JIKA TIDAK ADA DATA SAMA SEKALI
+        if (recommendations.isEmpty && localFiltered.isEmpty) {
+          _error = tempError ?? 'Gagal memuat data resep.';
+        }
+      });
+    }
   }
 
   @override
@@ -76,6 +162,7 @@ class _HomePageState extends State<HomePage> {
 
             // 🔍 Search Bar
             TextField(
+              controller: _searchController,
               decoration: InputDecoration(
                 hintText: "Coba cari resep...",
                 prefixIcon: const Icon(Icons.search, size: 20),
@@ -86,7 +173,21 @@ class _HomePageState extends State<HomePage> {
                   borderSide: BorderSide.none,
                 ),
               ),
+              onSubmitted: (query) {
+                if (query.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      // Navigasi ke SearchPage dan kirimkan kata kunci
+                      builder: (context) => SearchPage(initialQuery: query),
+                    ),
+                  );
+                  // Opsional: kosongkan field setelah pencarian
+                  _searchController.clear();
+                }
+              },
             ),
+
             const SizedBox(height: 20),
 
             // 🍲 Kategori
@@ -111,34 +212,77 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 24),
 
             // 📌 Card Resep 1
-            const Text(
-              "Cari Resep Terbaru",
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            _recipeCard("Ayam Bakar Padang", 101),
-            const SizedBox(height: 20),
+            // const Text(
+            //   "Cari Resep Terbaru",
+            //   style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            // ),
+            // const SizedBox(height: 12),
+            // _recipeCard("Ayam Bakar Padang", 101),
+            // const SizedBox(height: 20),
 
-            // 📌 Card Resep 2
-            const Text(
-              "Resep Populer",
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            _recipeCard("Mie Goreng Jawa", 250),
-            _recipeCard("Rendang Daging", 244),
-            _recipeCard("Klepon Gula Merah", 108),
+            //dianmis card utama
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (_error != null)
+              Center(child: Text('Gagal memuat data: $_error'))
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // --- 1. Resep Terbaru (dari API Lokal CI4) ---
+                  const Text(
+                    "Cari Resep Terbaru (Lokal)",
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
 
-            const SizedBox(height: 20),
+                  if (_localNewRecipes.isEmpty)
+                    const Text('Belum ada resep lokal terbaru.'),
+                  // Loop data terbaru
+                  ..._localNewRecipes.map((r) => _buildRecipeCard(r)).toList(),
 
-            // 📌 Card Resep 3
-            const Text(
-              "Rekomendasi Untuk Kamu",
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            _recipeCard("Nasi Uduk Betawi", 209),
-            _recipeCard("Kimchi Jjigae", 210),
+                  const SizedBox(height: 20),
+
+                  // --- 2. Resep Populer/Rekomendasi (dari TheMealDB) ---
+                  Text(
+                    "Rekomendasi Resep Populer: $_selectedCategory",
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (_recommendations.isEmpty)
+                    const Text('Gagal memuat resep rekomendasi.'),
+                  // Loop data rekomendasi
+                  ..._recommendations.map((r) => _buildRecipeCard(r)).toList(),
+
+                  const SizedBox(height: 20),
+                ],
+              ),
+
+            //   // 📌 Card Resep 2
+            //   const Text(
+            //     "Resep Populer",
+            //     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            //   ),
+            //   const SizedBox(height: 12),
+            //   _recipeCard("Mie Goreng Jawa", 250),
+            //   _recipeCard("Rendang Daging", 244),
+            //   _recipeCard("Klepon Gula Merah", 108),
+
+            //   const SizedBox(height: 20),
+
+            //   // 📌 Card Resep 3
+            //   const Text(
+            //     "Rekomendasi Untuk Kamu",
+            //     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            //   ),
+            //   const SizedBox(height: 12),
+            //   _recipeCard("Nasi Uduk Betawi", 209),
+            //   _recipeCard("Kimchi Jjigae", 210),
+            // ],
           ],
         ),
       ),
@@ -148,18 +292,36 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _categoryItem(String title, IconData icon) {
+    final isActive = _selectedCategory == title;
     return Padding(
       padding: const EdgeInsets.only(right: 16),
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 30,
-            backgroundColor: Colors.deepOrange.shade50,
-            child: Icon(icon, size: 28, color: Colors.deepOrange),
-          ),
-          const SizedBox(height: 6),
-          Text(title, style: const TextStyle(fontSize: 12)),
-        ],
+      child: GestureDetector(
+        onTap: () => _onCategoryTap(title),
+
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: isActive
+                  ? Colors.deepOrange
+                  : Colors.deepOrange.shade50,
+              child: Icon(
+                icon,
+                size: 28,
+                color: isActive ? Colors.white : Colors.deepOrange,
+              ),
+            ),
+
+            const SizedBox(height: 6),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -186,6 +348,80 @@ class _HomePageState extends State<HomePage> {
           Icons.arrow_forward_ios,
           size: 16,
           color: Colors.deepOrange,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecipeCard(RecipeModel resep) {
+    // Cek apakah ini data lokal atau TheMealDB
+    final isLocal = resep.author != 'TheMealDB';
+
+    String imageUrl = resep.image ?? 'https://picsum.photos/200';
+
+    // Jika lokal dan hanya nama file, bangun URL lengkap
+    if (isLocal && !imageUrl.startsWith('http')) {
+      // Pastikan resep.image TIDAK kosong
+      if (resep.image != null && resep.image!.isNotEmpty) {
+        // Periksa dan perbaiki jika image hanya nama file
+        imageUrl = '${api.baseUrl}/uploads/recipes/${resep.image}';
+      } else {
+        // Atur URL ke placeholder jika gambar lokal kosong
+        imageUrl = 'https://via.placeholder.com/200?text=No+Image';
+      }
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () async {
+          // Jika resep dari TheMealDB (hanya punya ID dan nama),
+          // kita harus Lakukan Lookup Detail lagi sebelum navigasi.
+          if (!isLocal) {
+            final detail = await dbApi.lookupMealDetail(resep.id.toString());
+            if (detail != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DetailResep(resep: detail),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Gagal memuat detail resep')),
+              );
+            }
+          } else {
+            // Jika resep lokal CI4 (sudah lengkap), langsung navigasi
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => DetailResep(resep: resep),
+              ),
+            );
+          }
+        },
+        child: ListTile(
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.network(
+              imageUrl,
+              width: 55,
+              height: 55,
+              fit: BoxFit.cover,
+            ),
+          ),
+          title: Text(resep.title),
+          subtitle: Text(
+            isLocal ? resep.kategori : 'External | Kategori: ${resep.kategori}',
+          ),
+          trailing: const Icon(
+            Icons.arrow_forward_ios,
+            size: 16,
+            color: Colors.deepOrange,
+          ),
         ),
       ),
     );
