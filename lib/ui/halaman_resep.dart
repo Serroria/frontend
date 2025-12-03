@@ -61,7 +61,7 @@ class _HalamanResepState extends State<HalamanResep> {
                   // Meneruskan data dari Model ke Partial Card
                   return RecipeCard(
                     // Ganti dengan nama widget Card Anda
-                    imageUrl: recipe.image,
+                    imageUrl: recipe.image ?? '',
                     title: recipe.title,
                     kategori: recipe.kategori,
                     rating: recipe.rating
