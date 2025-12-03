@@ -340,6 +340,29 @@ class ApiService {
       );
     }
   }
+
+  Future<Map<String, dynamic>> updateRecipe(
+    int id,
+    Map<String, dynamic> data,
+  ) async {
+    final url = Uri.parse('$_baseUrl/resep/$id'); // PUT /resep/{id}
+
+    final response = await http
+        .put(
+          url,
+          headers: await _getAuthHeaders(),
+          body: json.encode(data), // Kirim data sebagai JSON
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else if (response.statusCode == 401) {
+      throw TokenExpiredException();
+    } else {
+      throw Exception('Gagal update resep, status: ${response.statusCode}');
+    }
+  }
 }
 
 // Hapus semua kode tambahan setelah ini (misalnya class LoginPage yang tidak relevan dengan ApiService)

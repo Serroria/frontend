@@ -95,6 +95,20 @@ class _MyResepPageState extends State<MyResepPage> {
     );
   }
 
+  void _navigateToEditResep(RecipeModel resep) async {
+    final result = await Navigator.push(
+      context,
+      // Asumsi TambahResepPage dimodifikasi untuk menerima data edit
+      MaterialPageRoute(
+        builder: (context) => TambahResepPage(recipeToEdit: resep),
+      ),
+    );
+
+    if (result == true) {
+      await _loadUserAndFetch(); // Refresh setelah edit
+    }
+  }
+
   Future<void> _deleteRecipe(int id) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -254,8 +268,9 @@ class _MyResepPageState extends State<MyResepPage> {
                         ),
                         trailing: PopupMenuButton<String>(
                           onSelected: (val) async {
+                            final r = _myRecipes[index];
                             if (val == 'edit') {
-                              // TODO: Navigasi edit resep
+                              _navigateToEditResep(r);
                             } else if (val == 'delete') {
                               await _deleteRecipe(r.id);
                             }

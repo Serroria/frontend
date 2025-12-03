@@ -2,9 +2,16 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
+import '../models/recipe_model.dart';
 
 class TambahResepPage extends StatefulWidget {
-  const TambahResepPage({super.key});
+  //const TambahResepPage({super.key});
+  final RecipeModel? recipeToEdit;
+
+  const TambahResepPage({
+    super.key,
+    this.recipeToEdit, // ✅ Tambahkan parameter ini
+  });
 
   @override
   State<TambahResepPage> createState() => _TambahResepPageState();
