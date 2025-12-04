@@ -3,12 +3,14 @@ class LoginResponse {
   final String token;
   final String userEmail;
   final int userId;
+  final String userName;
 
   LoginResponse({
     required this.status,
     required this.token,
     required this.userEmail,
     required this.userId,
+    required this.userName,
   });
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
@@ -30,6 +32,9 @@ class LoginResponse {
       userEmail: (user['email'] ?? '').toString(),
       // Gunakan tryParse untuk mencegah crash jika ID bukan angka
       userId: int.tryParse(user['id'].toString()) ?? 0,
+      // Ambil username dari field 'username' atau 'nama' di user object
+      userName: (user['username'] ?? user['nama'] ?? user['name'] ?? '')
+          .toString(),
     );
   }
 }

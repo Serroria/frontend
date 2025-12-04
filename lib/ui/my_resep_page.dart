@@ -72,7 +72,7 @@ class _MyResepPageState extends State<MyResepPage> {
   void _navigateToDetailResep(RecipeModel resep) {
     String finalImageUrl = resep.image ?? '';
     if (finalImageUrl.isNotEmpty && !finalImageUrl.startsWith('http')) {
-      finalImageUrl = '${api.baseUrl}/uploads/receipes/${finalImageUrl}';
+      finalImageUrl = '${api.baseUrl}/uploads/recipes/${finalImageUrl}';
     }
 
     final resepFinal = RecipeModel(
@@ -130,8 +130,28 @@ class _MyResepPageState extends State<MyResepPage> {
 
     if (confirmed != true) return;
 
+    // Tampilkan loading dialog
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AlertDialog(
+          content: SizedBox(
+            height: 80,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        ),
+      );
+    }
+
     try {
+      print('DEBUG: Deleting recipe ID: $id');
       final ok = await api.deleteRecipe(id);
+
+      if (mounted) {
+        Navigator.pop(context); // close loading dialog
+      }
+
       if (!mounted) return;
 
       if (ok) {
@@ -147,7 +167,13 @@ class _MyResepPageState extends State<MyResepPage> {
         ).showSnackBar(const SnackBar(content: Text('Gagal menghapus resep')));
       }
     } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // close loading dialog
+      }
+
       if (!mounted) return;
+
+      print('DEBUG: Delete Error: $e');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));

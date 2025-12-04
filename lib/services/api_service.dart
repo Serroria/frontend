@@ -109,6 +109,7 @@ class ApiService {
           token: errorData['message'] ?? '',
           userEmail: '',
           userId: 0,
+          userName: '',
         );
       }
     } catch (e) {
@@ -117,6 +118,7 @@ class ApiService {
         token: 'Error: $e',
         userEmail: '',
         userId: 0,
+        userName: '',
       );
     }
   }
@@ -147,70 +149,77 @@ class ApiService {
     Map<String, dynamic> data,
     File? imageFile,
   ) async {
-    // ✅ Endponit baru yang sesuai dengan routes.php: /recipes/create
-    var uri = Uri.parse('$_baseUrl/resep/create');
-    var request = http.MultipartRequest('POST', uri);
+    // Endpoint untuk membuat resep baru (multipart POST dengan optional image)
+    final uri = Uri.parse('$_baseUrl/resep/create');
 
-    // request.headers.addAll(await _getAuthHeaders());
-    data.forEach((key, value) {
-      request.fields[key] = value.toString();
-    });
-
-    if (imageFile != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath('image', imageFile.path),
-      );
-    }
     try {
-      var response = await request.send().timeout(const Duration(seconds: 60));
-      // 👈 Coba beri batas waktu 30 detik
-      var responseBody = await response.stream.bytesToString();
+      final request = http.MultipartRequest('POST', uri);
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return jsonDecode(responseBody);
-      } else if (response.statusCode == 401) {
-        throw TokenExpiredException();
-      } else {
-        throw Exception(
-          'Gagal upload resep: (${response.statusCode}) $responseBody',
+      // Tambahkan header Authorization jika ada token
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+
+      // Tambahkan fields
+      data.forEach((k, v) => request.fields[k] = v.toString());
+
+      // Tambahkan file jika ada
+      if (imageFile != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('image', imageFile.path),
         );
       }
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 30),
+      );
+      final responseBody = await streamedResponse.stream.bytesToString();
+
+      print('DEBUG: postRecipe status: ${streamedResponse.statusCode}');
+      print('DEBUG: postRecipe body: $responseBody');
+
+      if (streamedResponse.statusCode == 200 ||
+          streamedResponse.statusCode == 201) {
+        return jsonDecode(responseBody) as Map<String, dynamic>;
+      } else if (streamedResponse.statusCode == 401) {
+        throw TokenExpiredException();
+      } else {
+        try {
+          final errorBody = jsonDecode(responseBody);
+          throw Exception(
+            'Gagal membuat resep (${streamedResponse.statusCode}): ${errorBody['message'] ?? responseBody}',
+          );
+        } catch (e) {
+          throw Exception(
+            'Gagal membuat resep (${streamedResponse.statusCode}): $responseBody',
+          );
+        }
+      }
     } on TimeoutException {
-      // Menangkap jika request.send() melebihi batas 30 detik
-      throw Exception(
-        'Waktu Tunggu (Timeout) Koneksi Habis (60 detik). Coba lagi.',
-      );
-    } on SocketException catch (e) {
-      // Menangkap error jaringan seperti koneksi ditolak
-      throw Exception(
-        'Kesalahan Koneksi Jaringan: Periksa Base URL atau server Anda. Detail: $e',
-      );
+      throw Exception('Waktu tunggu pembuatan resep habis (30 detik)');
     } catch (e) {
-      // Menangkap error umum lainnya
-      throw Exception('Terjadi Kesalahan Tak Terduga: $e');
+      rethrow;
     }
   }
 
-  // di ApiService class
-
-  // ambil semua resep — lebih forgiving terhadap format response
+  // Ambil semua resep (generic GET /resep)
   Future<List<RecipeModel>> fetchRecipes() async {
-    final response = await http.get(
-      Uri.parse('$_baseUrl/resep'),
-      headers: await _getAuthHeaders(),
-    );
+    final url = Uri.parse('$_baseUrl/resep');
+
+    final response = await http
+        .get(url, headers: await _getAuthHeaders())
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body);
       List<dynamic> listData;
-
-      // jika backend merespon { status: true, data: [...] }
       if (body is Map && body.containsKey('data')) {
         listData = body['data'];
       } else if (body is List) {
         listData = body;
       } else {
-        throw Exception('Format response tidak dikenali');
+        // Unexpected format, try to wrap single object
+        listData = [];
       }
 
       return listData.map((json) => RecipeModel.fromJson(json)).toList();
@@ -223,41 +232,98 @@ class ApiService {
 
   // ambil resep milik user berdasarkan id
   Future<List<RecipeModel>> fetchUserRecipes(int userId) async {
-    final response = await http.get(
+    // Beberapa backend mungkin mengekspos route berbeda untuk resep user.
+    // Coba urutkan beberapa kandidat endpoint dan ambil respons pertama yang berhasil.
+    final candidates = [
       Uri.parse('$_baseUrl/resep/user/$userId'),
-      headers: await _getAuthHeaders(),
-    );
+      Uri.parse('$_baseUrl/resep/user_id/$userId'),
+      Uri.parse('$_baseUrl/resep/userId/$userId'),
+      Uri.parse('$_baseUrl/resep?user_id=$userId'),
+      Uri.parse('$_baseUrl/resep?userId=$userId'),
+    ];
 
-    if (response.statusCode == 200) {
-      final body = jsonDecode(response.body);
-      List<dynamic> listData;
-      if (body is Map && body.containsKey('data')) {
-        listData = body['data'];
-      } else if (body is List) {
-        listData = body;
-      } else {
-        listData = body;
+    Exception? lastException;
+
+    for (final uri in candidates) {
+      try {
+        print('DEBUG: Trying fetchUserRecipes -> $uri');
+        final response = await http
+            .get(uri, headers: await _getAuthHeaders())
+            .timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200) {
+          final body = jsonDecode(response.body);
+          List<dynamic> listData;
+          if (body is Map && body.containsKey('data')) {
+            listData = body['data'];
+          } else if (body is List) {
+            listData = body;
+          } else {
+            listData = body;
+          }
+          return listData.map((json) => RecipeModel.fromJson(json)).toList();
+        } else if (response.statusCode == 401) {
+          throw TokenExpiredException();
+        } else if (response.statusCode == 404) {
+          // coba endpoint berikutnya
+          lastException = Exception('404 Not Found for $uri');
+          continue;
+        } else {
+          // hentikan dan laporkan error spesifik
+          throw Exception(
+            'Gagal memuat resep user, status: ${response.statusCode}',
+          );
+        }
+      } on TimeoutException catch (e) {
+        lastException = Exception('Timeout fetching $uri: $e');
+        continue;
+      } on SocketException catch (e) {
+        lastException = Exception('Network error fetching $uri: $e');
+        continue;
+      } catch (e) {
+        lastException = Exception('Error fetching $uri: $e');
+        continue;
       }
-      return listData.map((json) => RecipeModel.fromJson(json)).toList();
-    } else if (response.statusCode == 401) {
-      throw TokenExpiredException();
-    } else {
-      throw Exception(
-        'Gagal memuat resep user, status: ${response.statusCode}',
-      );
     }
+
+    // Jika semua kandidat gagal, lempar exception terakhir atau generic
+    if (lastException != null) throw lastException;
+    throw Exception('Gagal memuat resep user: tidak ada endpoint yang sesuai');
   }
 
-  // contoh delete (pastikan route di backend tersedia: DELETE /recipes/{id} atau /resep/{id})
+  // Delete recipe berdasarkan ID
   Future<bool> deleteRecipe(int id) async {
-    final uri = Uri.parse('$_baseUrl/resep/$id'); // sesuaikan route backend
-    final response = await http.delete(uri, headers: await _getAuthHeaders());
-    if (response.statusCode == 200 || response.statusCode == 204) {
-      return true;
-    } else if (response.statusCode == 401) {
-      throw TokenExpiredException();
-    } else {
-      return false;
+    final uri = Uri.parse('$_baseUrl/resep/$id'); // DELETE /resep/{id}
+
+    try {
+      print('DEBUG: Delete Recipe - ID: $id, URL: $uri');
+
+      final response = await http
+          .delete(uri, headers: await _getAuthHeaders())
+          .timeout(const Duration(seconds: 15));
+
+      print('DEBUG: Delete Response Status: ${response.statusCode}');
+      print('DEBUG: Delete Response Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return true;
+      } else if (response.statusCode == 401) {
+        throw TokenExpiredException();
+      } else {
+        try {
+          final errorBody = jsonDecode(response.body);
+          throw Exception(
+            'Gagal menghapus resep (${response.statusCode}): ${errorBody['message'] ?? 'Unknown error'}',
+          );
+        } catch (e) {
+          throw Exception('Gagal menghapus resep (${response.statusCode}): $e');
+        }
+      }
+    } on TimeoutException {
+      throw Exception('Waktu tunggu delete resep habis (15 detik)');
+    } catch (e) {
+      print('DEBUG: Delete Recipe Error: $e');
+      rethrow;
     }
   }
 
@@ -343,103 +409,328 @@ class ApiService {
 
   Future<Map<String, dynamic>> updateRecipe(
     int id,
-    Map<String, dynamic> data,
-  ) async {
-    final url = Uri.parse('$_baseUrl/resep/$id'); // PUT /resep/{id}
+    Map<String, dynamic> data, {
+    File? imageFile,
+  }) async {
+    final url = Uri.parse('$_baseUrl/resep/$id'); // endpoint utama
 
-    final response = await http
-        .put(
-          url,
-          headers: await _getAuthHeaders(),
-          body: json.encode(data), // Kirim data sebagai JSON
-        )
-        .timeout(const Duration(seconds: 15));
+    try {
+      print(
+        'DEBUG: Update Recipe - ID: $id, Data: $data, Image: ${imageFile?.path}',
+      );
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else if (response.statusCode == 401) {
-      throw TokenExpiredException();
-    } else {
-      throw Exception('Gagal update resep, status: ${response.statusCode}');
+      // Jika ada file gambar -> gunakan multipart POST dengan override (server mungkin butuh form-data)
+      if (imageFile != null) {
+        var request = http.MultipartRequest('POST', url);
+
+        // Tambahkan header Authorization saja (jangan paksa Content-Type)
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString('token');
+        if (token != null) request.headers['Authorization'] = 'Bearer $token';
+
+        // method override agar backend mengenali ini sebagai PUT
+        request.fields['_method'] = 'PUT';
+
+        // Convert semua data ke string dan tambahkan ke fields
+        data.forEach((key, value) => request.fields[key] = value.toString());
+
+        print('DEBUG: updateRecipe multipart fields: ${request.fields}');
+
+        request.files.add(
+          await http.MultipartFile.fromPath('image', imageFile.path),
+        );
+
+        var streamed = await request.send().timeout(
+          const Duration(seconds: 30),
+        );
+        final responseBody = await streamed.stream.bytesToString();
+        print('DEBUG: Update (multipart) Status: ${streamed.statusCode}');
+        print('DEBUG: Update (multipart) Body: $responseBody');
+
+        if (streamed.statusCode == 200 || streamed.statusCode == 201) {
+          return jsonDecode(responseBody);
+        } else if (streamed.statusCode == 401) {
+          throw TokenExpiredException();
+        } else {
+          try {
+            final errorBody = jsonDecode(responseBody);
+            throw Exception(
+              'Gagal update resep (${streamed.statusCode}): ${errorBody['message'] ?? responseBody}',
+            );
+          } catch (e) {
+            throw Exception(
+              'Gagal update resep (${streamed.statusCode}): $responseBody',
+            );
+          }
+        }
+      }
+
+      // Jika tidak ada file -> kirim PUT dengan JSON body (lebih kompatibel untuk update tanpa file)
+      print('DEBUG: updateRecipe JSON payload: $data');
+      final headers = await _getAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+      final response = await http
+          .put(url, headers: headers, body: jsonEncode(data))
+          .timeout(const Duration(seconds: 30));
+
+      print('DEBUG: Update (JSON) Response Status: ${response.statusCode}');
+      print('DEBUG: Update (JSON) Response Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body);
+      } else if (response.statusCode == 401) {
+        throw TokenExpiredException();
+      } else {
+        try {
+          final errorBody = jsonDecode(response.body);
+          throw Exception(
+            'Gagal update resep (${response.statusCode}): ${errorBody['message'] ?? response.body}',
+          );
+        } catch (e) {
+          throw Exception(
+            'Gagal update resep (${response.statusCode}): ${response.body}',
+          );
+        }
+      }
+    } on TimeoutException {
+      throw Exception('Waktu tunggu update resep habis (30 detik)');
+    } catch (e) {
+      print('DEBUG: Update Recipe Error: $e');
+      rethrow;
     }
   }
   // 👇 FUNGSI BARU DIMULAI DI SINI (1/3)
 
   /// Menyimpan resep ke daftar favorit user (POST /resep/simpan)
   Future<void> saveRecipe(int userId, int recipeId) async {
-    final url = Uri.parse('$_baseUrl/resep/simpan');
+    // Coba beberapa kandidat endpoint karena backend bisa bervariasi
+    final candidates = [
+      Uri.parse('$_baseUrl/resep/simpan'),
+      Uri.parse('$_baseUrl/resep/save'),
+      Uri.parse('$_baseUrl/resep/$recipeId/simpan'),
+      Uri.parse('$_baseUrl/resep/saved'),
+    ];
 
-    final response = await http
-        .post(
-          url,
-          headers: await _getAuthHeaders(),
-          body: json.encode({'user_id': userId, 'recipe_id': recipeId}),
-        )
-        .timeout(const Duration(seconds: 10));
+    Exception? lastException;
 
-    // CI4 diharapkan merespon 201 Created atau 200 OK
-    if (response.statusCode == 201 || response.statusCode == 200) {
-      return;
-    } else if (response.statusCode == 401) {
-      throw TokenExpiredException();
-    } else {
-      final errorBody = jsonDecode(response.body);
-      throw Exception(
-        'Gagal menyimpan resep: ${errorBody['message'] ?? 'Kode: ${response.statusCode}'}',
-      );
+    for (final uri in candidates) {
+      try {
+        print('DEBUG: Trying saveRecipe -> $uri');
+        final response = await http
+            .post(
+              uri,
+              headers: await _getAuthHeaders(),
+              body: json.encode({'user_id': userId, 'recipe_id': recipeId}),
+            )
+            .timeout(const Duration(seconds: 10));
+
+        print('DEBUG: saveRecipe $uri -> ${response.statusCode}');
+        print('DEBUG: saveRecipe body: ${response.body}');
+
+        if (response.statusCode == 201 ||
+            response.statusCode == 200 ||
+            response.statusCode == 204) {
+          return;
+        } else if (response.statusCode == 401) {
+          throw TokenExpiredException();
+        } else if (response.statusCode == 404) {
+          // coba endpoint berikutnya
+          lastException = Exception('404 Not Found for $uri');
+          continue;
+        } else {
+          // Log error, tapi jangan langsung throw agar UI masih bisa menyimpan lokal sebagai fallback
+          try {
+            final errorBody = jsonDecode(response.body);
+            print(
+              'DEBUG: saveRecipe error: ${errorBody['message'] ?? response.body}',
+            );
+          } catch (_) {
+            print('DEBUG: saveRecipe unexpected response: ${response.body}');
+          }
+          // Return tanpa throw sehingga caller dapat melakukan fallback lokal
+          return;
+        }
+      } on TimeoutException catch (e) {
+        lastException = Exception('Timeout saving to $uri: $e');
+        continue;
+      } on SocketException catch (e) {
+        lastException = Exception('Network error saving to $uri: $e');
+        continue;
+      } catch (e) {
+        lastException = Exception('Error saving to $uri: $e');
+        continue;
+      }
     }
+
+    // Jika semua candidate gagal, log dan kembalikan tanpa exception agar client bisa fallback lokal
+    print(
+      'DEBUG: saveRecipe - semua endpoint gagal, lastException: $lastException',
+    );
+    return;
   }
 
   /// Menghapus resep dari daftar favorit user (DELETE /resep/simpan/hapus)
   Future<void> removeSavedRecipe(int userId, int recipeId) async {
-    // Menggunakan body dalam DELETE request
-    final url = Uri.parse('$_baseUrl/resep/simpan/hapus');
+    // Coba beberapa kandidat endpoint untuk menghapus saved
+    final deleteCandidates = [
+      Uri.parse('$_baseUrl/resep/simpan/hapus'),
+      Uri.parse('$_baseUrl/resep/simpan/remove'),
+      Uri.parse('$_baseUrl/resep/$recipeId/simpan/hapus'),
+      Uri.parse('$_baseUrl/resep/saved/remove'),
+    ];
 
-    final response = await http
-        .delete(
-          url,
-          headers: await _getAuthHeaders(),
-          body: json.encode({'user_id': userId, 'recipe_id': recipeId}),
-        )
-        .timeout(const Duration(seconds: 10));
+    Exception? lastException;
 
-    // CI4 diharapkan merespon 200 OK atau 204 No Content
-    if (response.statusCode == 200 || response.statusCode == 204) {
-      return;
-    } else if (response.statusCode == 401) {
-      throw TokenExpiredException();
-    } else {
-      final errorBody = jsonDecode(response.body);
-      throw Exception(
-        'Gagal menghapus resep tersimpan: ${errorBody['message'] ?? 'Kode: ${response.statusCode}'}',
-      );
+    for (final uri in deleteCandidates) {
+      try {
+        print('DEBUG: Trying removeSavedRecipe -> $uri');
+
+        // Beberapa server tidak mendukung body pada DELETE; jika gagal gunakan POST fallback
+        final response = await http
+            .delete(
+              uri,
+              headers: await _getAuthHeaders(),
+              body: json.encode({'user_id': userId, 'recipe_id': recipeId}),
+            )
+            .timeout(const Duration(seconds: 10));
+
+        print('DEBUG: removeSavedRecipe $uri -> ${response.statusCode}');
+        print('DEBUG: removeSavedRecipe body: ${response.body}');
+
+        if (response.statusCode == 200 || response.statusCode == 204) {
+          return;
+        } else if (response.statusCode == 401) {
+          throw TokenExpiredException();
+        } else if (response.statusCode == 404) {
+          lastException = Exception('404 Not Found for $uri');
+          continue;
+        } else {
+          // Jika ada error lain, coba fallback POST remove
+          try {
+            final postResp = await http
+                .post(
+                  uri,
+                  headers: await _getAuthHeaders(),
+                  body: json.encode({'user_id': userId, 'recipe_id': recipeId}),
+                )
+                .timeout(const Duration(seconds: 10));
+
+            print(
+              'DEBUG: removeSavedRecipe POST fallback $uri -> ${postResp.statusCode}',
+            );
+            print('DEBUG: removeSavedRecipe POST body: ${postResp.body}');
+
+            if (postResp.statusCode == 200 ||
+                postResp.statusCode == 204 ||
+                postResp.statusCode == 201) {
+              return;
+            }
+          } catch (e) {
+            print('DEBUG: removeSavedRecipe POST fallback failed: $e');
+          }
+
+          // Jangan lempar exception agar caller dapat melakukan fallback lokal
+          return;
+        }
+      } on TimeoutException catch (e) {
+        lastException = Exception('Timeout removing saved at $uri: $e');
+        continue;
+      } on SocketException catch (e) {
+        lastException = Exception('Network error removing saved at $uri: $e');
+        continue;
+      } catch (e) {
+        lastException = Exception('Error removing saved at $uri: $e');
+        continue;
+      }
     }
+
+    print(
+      'DEBUG: removeSavedRecipe - semua endpoint gagal, lastException: $lastException',
+    );
+    return;
   }
 
   /// Mengambil semua ID resep yang disimpan oleh user (GET /resep/simpan/user/{userId})
+  /// Coba multiple endpoint candidates jika endpoint utama 404
   Future<Set<int>> fetchSavedRecipeIds(int userId) async {
-    final url = Uri.parse('$_baseUrl/resep/simpan/user/$userId');
+    final candidates = [
+      Uri.parse('$_baseUrl/resep/simpan/user/$userId'),
+      Uri.parse('$_baseUrl/resep/simpan/$userId'),
+      Uri.parse('$_baseUrl/resep/user/$userId/simpan'),
+      Uri.parse('$_baseUrl/saved-recipes/$userId'),
+      Uri.parse('$_baseUrl/resep?user_id=$userId&saved=true'),
+    ];
 
-    final response = await http
-        .get(url, headers: await _getAuthHeaders())
-        .timeout(const Duration(seconds: 15));
+    Exception? lastException;
 
-    if (response.statusCode == 200) {
-      final body = jsonDecode(response.body);
-      List<dynamic> listData = body['data'] ?? [];
+    for (final uri in candidates) {
+      try {
+        print('DEBUG: Trying fetchSavedRecipeIds -> $uri');
+        final response = await http
+            .get(uri, headers: await _getAuthHeaders())
+            .timeout(const Duration(seconds: 15));
 
-      // Mapping list of objects {recipe_id: 123} menjadi Set<int>
-      return listData
-          // Ambil nilai dari kunci 'recipe_id'
-          .map<int>((json) => (json['recipe_id'] as int?) ?? 0)
-          // Pastikan ID tidak nol
-          .where((id) => id != 0)
-          .toSet();
-    } else if (response.statusCode == 401) {
-      throw TokenExpiredException();
-    } else {
-      throw Exception('Gagal memuat daftar simpanan: ${response.statusCode}');
+        if (response.statusCode == 200) {
+          final body = jsonDecode(response.body);
+          List<dynamic> listData;
+
+          // Handle berbagai format respons
+          if (body is Map && body.containsKey('data')) {
+            listData = body['data'] as List<dynamic>;
+          } else if (body is List) {
+            listData = body;
+          } else {
+            listData = [];
+          }
+
+          // Mapping list elements into ints. Support formats:
+          // - list of ints [1,2,3]
+          // - list of objects [{"recipe_id":123}, {"id":123}]
+          return listData
+              .map<int>((item) {
+                if (item is int) return item;
+                if (item is Map) {
+                  if (item.containsKey('recipe_id'))
+                    return (item['recipe_id'] as int?) ?? 0;
+                  if (item.containsKey('id')) return (item['id'] as int?) ?? 0;
+                }
+                return 0;
+              })
+              .where((id) => id != 0)
+              .toSet();
+        } else if (response.statusCode == 401) {
+          throw TokenExpiredException();
+        } else if (response.statusCode == 404) {
+          // Coba endpoint berikutnya
+          lastException = Exception('404 Not Found for $uri');
+          continue;
+        } else {
+          // Hentikan jika ada error selain 404
+          throw Exception(
+            'Gagal memuat daftar simpanan (${response.statusCode}): ${response.body}',
+          );
+        }
+      } on TimeoutException catch (e) {
+        lastException = Exception('Timeout fetching $uri: $e');
+        continue;
+      } on SocketException catch (e) {
+        lastException = Exception('Network error fetching $uri: $e');
+        continue;
+      } catch (e) {
+        lastException = Exception('Error fetching $uri: $e');
+        continue;
+      }
     }
+
+    // Jika semua candidate gagal, kembalikan set kosong (bukan error)
+    // sehingga tab "Resep Disimpan" bisa tetap ditampilkan (empty state)
+    print(
+      'DEBUG: fetchSavedRecipeIds - semua endpoint gagal, kembalikan set kosong',
+    );
+    if (lastException != null) {
+      print('DEBUG: Last exception: $lastException');
+    }
+    return <int>{};
   }
 
   Future<RecipeModel?> fetchUserRecipeById(int id) async {
@@ -450,7 +741,32 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body);
-      return RecipeModel.fromJson(body['data']);
+      dynamic jsonData;
+
+      // Tolerate different response shapes
+      if (body is Map && body.containsKey('data')) {
+        jsonData = body['data'];
+      } else if (body is Map &&
+          (body.containsKey('id') ||
+              body.containsKey('title') ||
+              body.containsKey('image'))) {
+        // Already the recipe object
+        jsonData = body;
+      } else if (body is List && body.isNotEmpty) {
+        jsonData = body[0];
+      } else {
+        print(
+          'DEBUG: fetchUserRecipeById - unexpected response shape for id=$id: $body',
+        );
+        return null;
+      }
+
+      try {
+        return RecipeModel.fromJson(jsonData);
+      } catch (e) {
+        print('DEBUG: fetchUserRecipeById - parse error for id=$id: $e');
+        return null;
+      }
     } else {
       return null;
     }

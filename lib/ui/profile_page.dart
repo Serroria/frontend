@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ✅ Import untuk SharedPrefs
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:typed_data';
+import 'dart:convert';
 import '../services/api_service.dart';
 import '../models/recipe_model.dart';
 import '../widgets/card_recipe.dart';
@@ -18,11 +20,10 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final ApiService _api = ApiService(); // Digunakan untuk mendapatkan Base URL
   int? _userId;
   String _displayName = "Memuat...";
-  String _handle = "@loading";
-  int _totalRecipes = 0; // Akan diupdate oleh salah satu tab
+  Uint8List? _profileImage;
+  int _recipeCount = 0;
 
   @override
   void initState() {
@@ -31,23 +32,43 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _loadProfileData() async {
-    // Di dunia nyata, Anda akan memanggil API profil dan SharedPrefs
     final prefs = await SharedPreferences.getInstance();
-    // Asumsi ID user disimpan di SharedPrefs setelah login
-    final fetchedUserId =
-        prefs.getInt('userId') ?? 1; // Default ke ID 1 jika tidak ada
+    final fetchedUserId = prefs.getInt('userId') ?? 1;
+    final username = prefs.getString('username') ?? 'User';
+    final profileImageBase64 = prefs.getString('profile_image');
 
-    // ASUMSI: Ambil data nama dan handle dari API /profile/{userId}
-    // Untuk demo, kita set dummy
-    await Future.delayed(const Duration(milliseconds: 100));
+    Uint8List? imageBytes;
+    if (profileImageBase64 != null && profileImageBase64.isNotEmpty) {
+      try {
+        imageBytes = base64Decode(profileImageBase64);
+      } catch (e) {
+        print('Error decoding image: $e');
+      }
+    }
 
     if (mounted) {
       setState(() {
         _userId = fetchedUserId;
-        _displayName = "Marsha Daviena";
-        _handle = "@cook_180405000";
-        // _totalRecipes akan diisi setelah tab resep selesai fetch
+        _displayName = username;
+        _profileImage = imageBytes;
+        _recipeCount = 0; // default, akan diisi segera
       });
+    }
+
+    // Ambil jumlah resep milik user (jangan block UI)
+    if (fetchedUserId != 0) {
+      try {
+        final api = ApiService();
+        final list = await api.fetchUserRecipes(fetchedUserId);
+        if (mounted) {
+          setState(() {
+            _recipeCount = list.length;
+          });
+        }
+      } catch (e) {
+        // Biarkan _recipeCount tetap 0 jika gagal
+        print('Error fetching recipe count: $e');
+      }
     }
   }
 
@@ -65,13 +86,15 @@ class _ProfilePageState extends State<ProfilePage> {
           foregroundColor: Colors.black87,
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const EditProfilePage(),
                   ),
                 );
+                // Reload profile after returning from edit
+                await _loadProfileData();
               },
               child: const Text(
                 "Edit",
@@ -86,22 +109,29 @@ class _ProfilePageState extends State<ProfilePage> {
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // HEADER PROFIL (foto + nama + total resep)
+            // HEADER PROFIL
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               color: Colors.white,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Foto profil
                   CircleAvatar(
                     radius: 32,
                     backgroundColor: Colors.deepPurple,
-                    child: const Icon(
-                      Icons.person,
-                      size: 32,
-                      color: Colors.white,
-                    ),
+                    backgroundImage: _profileImage != null
+                        ? MemoryImage(_profileImage!)
+                        : null,
+                    child: _profileImage == null
+                        ? Text(
+                            _displayName.isNotEmpty ? _displayName[0] : 'U',
+                            style: const TextStyle(
+                              fontSize: 32,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -117,7 +147,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _handle,
+                          "@${_displayName.toLowerCase().replaceAll(' ', '_')}",
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey.shade700,
@@ -125,7 +155,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "Resep: $_totalRecipes",
+                          "Resep: $_recipeCount",
                           style: const TextStyle(
                             fontSize: 13,
                             color: Colors.black87,
@@ -166,16 +196,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   _ProfileRecipeTab(
                     emptyText: "Belum ada resep yang kamu buat.",
                     isSavedRecipes: false,
-                    userId: _userId, // ✅ Teruskan ID User
-                    onCountUpdate: (count) {
-                      // Callback untuk update total resep
-                      setState(() => _totalRecipes = count);
-                    },
+                    userId: _userId,
                   ),
                   _ProfileRecipeTab(
                     emptyText: "Belum ada resep yang kamu simpan.",
                     isSavedRecipes: true,
-                    userId: _userId, // ✅ Teruskan ID User
+                    userId: _userId,
                   ),
                 ],
               ),
@@ -195,17 +221,14 @@ class _ProfileRecipeTab extends StatefulWidget {
   final String emptyText;
   final bool isSavedRecipes;
   final int? userId;
-  final Function(int)? onCountUpdate; // Callback untuk update total resep
 
   const _ProfileRecipeTab({
     required this.emptyText,
     required this.isSavedRecipes,
     this.userId,
-    this.onCountUpdate,
   });
 
   @override
-  // Perbaiki typo "e" di _ProfileRecipeTabeState
   State<_ProfileRecipeTab> createState() => _ProfileRecipeTabState();
 }
 
@@ -235,10 +258,12 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
 
   Future<void> _fetchRecipes() async {
     if (widget.userId == null) {
-      if (mounted)
-        setState(
-          () => {_error = "User ID tidak ditemukan", _isLoading = false},
-        );
+      if (mounted) {
+        setState(() {
+          _error = "User ID tidak ditemukan";
+          _isLoading = false;
+        });
+      }
       return;
     }
 
@@ -246,12 +271,70 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
       List<RecipeModel> fetchedData = [];
 
       if (widget.isSavedRecipes) {
-        final savedIds = await api.fetchSavedRecipeIds(widget.userId!);
-        // ambil detail resep berdasarkan ID
+        print('DEBUG: Fetching saved recipes for user ${widget.userId}');
+        var savedIds = await api.fetchSavedRecipeIds(widget.userId!);
+        print('DEBUG: Saved recipe IDs (server): $savedIds');
 
+        // Selalu gabungkan dengan saved IDs lokal sebagai fallback dan "source of truth" sementara
+        // Hal ini memastikan aksi simpan yang dilakukan secara lokal langsung terlihat di tab Profil
+        final prefs = await SharedPreferences.getInstance();
+        final localList = prefs.getStringList('local_saved_recipes') ?? [];
+        final localIds = localList
+            .map((s) => int.tryParse(s) ?? 0)
+            .where((i) => i != 0)
+            .toSet();
+        if (localIds.isNotEmpty) {
+          print('DEBUG: Saved recipe IDs (local): $localIds');
+        }
+
+        // Gabungkan server + lokal (lokal menang jika ada duplikasi)
+        savedIds = {...savedIds, ...localIds};
+        print('DEBUG: Saved recipe IDs (merged): $savedIds');
+
+        // ambil detail resep berdasarkan ID
+        // Jika fetch detail gagal, tambahkan placeholder agar item tetap terlihat di UI
         for (var id in savedIds) {
-          final resep = await api.fetchUserRecipeById(id); // Buat fungsi baru
-          if (resep != null) fetchedData.add(resep);
+          try {
+            final resep = await api.fetchUserRecipeById(id);
+            if (resep != null) {
+              fetchedData.add(resep);
+            } else {
+              // buat placeholder minimal sehingga resep yang disimpan tetap tampil
+              fetchedData.add(
+                RecipeModel(
+                  id: id,
+                  title: 'Resep (ID: $id)',
+                  kategori: '-',
+                  rating: '0',
+                  ingredients: '',
+                  steps: '',
+                  description: '',
+                  image: null,
+                  time: '',
+                  difficulty: '',
+                  author: '-',
+                ),
+              );
+            }
+          } catch (e) {
+            print('DEBUG: Gagal fetch detail resep $id: $e');
+            // tambahkan placeholder jika terjadi error
+            fetchedData.add(
+              RecipeModel(
+                id: id,
+                title: 'Resep (ID: $id)',
+                kategori: '-',
+                rating: '0',
+                ingredients: '',
+                steps: '',
+                description: '',
+                image: null,
+                time: '',
+                difficulty: '',
+                author: '-',
+              ),
+            );
+          }
         }
       } else {
         // Ambil resep user langsung
@@ -264,10 +347,6 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
           _isLoading = false;
           _error = null;
         });
-        // Update total resep di ProfilePage
-        if (!widget.isSavedRecipes && widget.onCountUpdate != null) {
-          widget.onCountUpdate!(_recipes.length);
-        }
       }
     } catch (e) {
       if (mounted) {
@@ -316,14 +395,18 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
 
         // ✅ NAVIGASI DAN CARD
         return GestureDetector(
-          onTap: () {
+          onTap: () async {
             // Navigasi ke Detail Resep
-            Navigator.push(
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => DetailResep(resep: resep),
               ),
             );
+            // Setelah kembali dari detail, refresh recipes (jika tab disimpan)
+            if (widget.isSavedRecipes) {
+              await _fetchRecipes();
+            }
           },
           child: RecipeCard(
             imageUrl: imageUrl,

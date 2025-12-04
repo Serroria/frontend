@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -10,36 +13,61 @@ class EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
 
-  // SEMENTARA: isi default
-  final TextEditingController _nameController = TextEditingController(
-    text: "Marsha Daviena",
-  );
-  final TextEditingController _idController = TextEditingController(
-    text: "@cook_180405000",
-  );
-  final TextEditingController _emailController = TextEditingController(
-    text: "marshadaviena@gmail.com",
-  );
-  final TextEditingController _aboutController = TextEditingController(
-    text: "Tentang kamu",
-  );
+  // hanya username + foto lokal
+  final TextEditingController _nameController = TextEditingController();
+  String? _profileImageBase64;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void dispose() {
     _nameController.dispose();
-    _idController.dispose();
-    _emailController.dispose();
-    _aboutController.dispose();
     super.dispose();
   }
 
-  void _saveProfile() {
+  @override
+  void initState() {
+    super.initState();
+    _loadFromPrefs();
+  }
+
+  Future<void> _loadFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString('username') ?? '';
+    final profileImage = prefs.getString('profile_image');
+
+    setState(() {
+      _nameController.text = username;
+      _profileImageBase64 = profileImage;
+    });
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final picked = await _picker.pickImage(source: ImageSource.gallery);
+      if (picked != null) {
+        final bytes = await picked.readAsBytes();
+        final b64 = base64Encode(bytes);
+        setState(() {
+          _profileImageBase64 = b64;
+        });
+      }
+    } catch (e) {
+      print('Error picking image: $e');
+    }
+  }
+
+  Future<void> _saveProfile() async {
     if (_formKey.currentState!.validate()) {
-      // Di sini nanti bisa kirim ke backend
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profil berhasil diperbarui (dummy)")),
-      );
-      Navigator.pop(context); // kembali ke halaman profil
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('username', _nameController.text.trim());
+      if (_profileImageBase64 != null) {
+        await prefs.setString('profile_image', _profileImageBase64!);
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profil diperbarui')));
+      Navigator.pop(context);
     }
   }
 
@@ -67,22 +95,25 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     CircleAvatar(
                       radius: 40,
                       backgroundColor: Colors.deepPurple,
-                      child: Text(
-                        _nameController.text.isNotEmpty
-                            ? _nameController.text[0]
-                            : "U",
-                        style: const TextStyle(
-                          fontSize: 32,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      backgroundImage: _profileImageBase64 != null
+                          ? MemoryImage(base64Decode(_profileImageBase64!))
+                          : null,
+                      child: _profileImageBase64 == null
+                          ? Text(
+                              _nameController.text.isNotEmpty
+                                  ? _nameController.text[0]
+                                  : "U",
+                              style: const TextStyle(
+                                fontSize: 32,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
                     ),
                     const SizedBox(height: 8),
                     TextButton(
-                      onPressed: () {
-                        // TODO: kalau mau, nanti tambahkan pilih foto
-                      },
+                      onPressed: _pickImage,
                       child: const Text(
                         "Ubah foto",
                         style: TextStyle(color: Colors.deepOrange),
@@ -107,38 +138,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   }
                   return null;
                 },
-              ),
-              const SizedBox(height: 16),
-
-              _buildLabel("ID Cookpad"),
-              TextFormField(
-                controller: _idController,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  border: UnderlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              _buildLabel("Email"),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  border: UnderlineInputBorder(),
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-
-              _buildLabel("Tentang kamu dan masakanmu"),
-              TextFormField(
-                controller: _aboutController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  border: UnderlineInputBorder(),
-                ),
               ),
 
               const SizedBox(height: 32),

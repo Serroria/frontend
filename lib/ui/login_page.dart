@@ -65,7 +65,10 @@ class _LoginPageState extends State<LoginPage> {
       if (response.status) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', response.token);
-        await prefs.setInt('user_id', response.userId);
+        // Store userId using camelCase key so other pages can read it
+        await prefs.setInt('userId', response.userId);
+        // Save username dari database
+        await prefs.setString('username', response.userName);
 
         if (!mounted) return;
 

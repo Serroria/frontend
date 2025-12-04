@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/card_recipe.dart';
 import '../services/api_service.dart';
 import '../models/recipe_model.dart';
@@ -18,34 +19,53 @@ class _HalamanResepState extends State<HalamanResep> {
   final TheMealDbService dbApiService = TheMealDbService();
 
   Set<int> _savedRecipeIds = {};
-  // ✅ DUMMY USER ID: Ganti dengan ID user yang sebenarnya dari SharedPrefs
-  final int _currentUserId = 1;
+  int _currentUserId = 1; // Default, akan diset dari SharedPreferences
 
   @override
   void initState() {
     super.initState();
-    // Panggil _loadSavedRecipes sebelum _fetchAndMergeRecipes
-    _loadSavedRecipes();
-    _futureRecipes = _fetchAndMergeRecipes();
+    // Muat userId dari SharedPreferences terlebih dahulu
+    _initializeUserId();
   }
 
-  // 👇 FUNGSI LENGKAP: Memuat ID Resep yang Disimpan
+  Future<void> _initializeUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getInt('userId') ?? 1;
+    if (mounted) {
+      setState(() {
+        _currentUserId = userId;
+      });
+      // Setelah userId siap, load saved recipes dan fetch data
+      await _loadSavedRecipes();
+      if (mounted) {
+        setState(() {
+          _futureRecipes = _fetchAndMergeRecipes();
+        });
+      }
+    }
+  }
+
+  // 👇 FUNGSI LENGKAP: Memuat ID Resep yang Disimpan dari API
   Future<void> _loadSavedRecipes() async {
-    // ASUMSI: Anda punya API endpoint yang mengembalikan LIST ID yang disimpan
-    // API Service Anda harus memiliki metode seperti 'fetchSavedRecipeIds(userId)'
-    // Untuk demo, kita set dummy ID
-    await Future.delayed(const Duration(milliseconds: 500));
     if (mounted) {
       try {
-        // Contoh: Mengambil ID dari API
-        // final savedIds = await apiService.fetchSavedRecipeIds(_currentUserId);
+        // Ambil ID resep yang disimpan dari API
+        final savedIds = await apiService.fetchSavedRecipeIds(_currentUserId);
+        // Juga gabungkan dengan saved IDs lokal (fallback jika backend tidak menyimpan)
+        final prefs = await SharedPreferences.getInstance();
+        final localList = prefs.getStringList('local_saved_recipes') ?? [];
+        final localIds = localList
+            .map((s) => int.tryParse(s) ?? 0)
+            .where((i) => i != 0)
+            .toSet();
 
-        // Menggunakan data dummy untuk demonstrasi
-        final savedIds = {52857, 101, 53049};
+        final merged = {...savedIds, ...localIds};
 
-        setState(() {
-          _savedRecipeIds = savedIds;
-        });
+        if (mounted) {
+          setState(() {
+            _savedRecipeIds = merged;
+          });
+        }
         debugPrint('Resep yang disimpan dimuat: $_savedRecipeIds');
       } catch (e) {
         debugPrint('Gagal memuat resep yang disimpan: $e');
@@ -57,7 +77,7 @@ class _HalamanResepState extends State<HalamanResep> {
 
   // 👇 FUNGSI LENGKAP: Menangani Tombol Simpan/Hapus Simpan
   void _handleSaveToggle(RecipeModel recipe) async {
-    if (recipe.id == null || recipe.id == 0) {
+    if (recipe.id == 0) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('ID Resep tidak valid.')));
@@ -65,7 +85,7 @@ class _HalamanResepState extends State<HalamanResep> {
     }
 
     final isCurrentlySaved = _savedRecipeIds.contains(recipe.id);
-    final recipeId = recipe.id!;
+    final recipeId = recipe.id;
 
     // 1. Feedback UI cepat (Optimistic Update)
     setState(() {
@@ -86,12 +106,26 @@ class _HalamanResepState extends State<HalamanResep> {
             content: Text('Resep "${recipe.title}" dihapus dari simpanan.'),
           ),
         );
+        // Hapus juga dari penyimpanan lokal
+        final prefs = await SharedPreferences.getInstance();
+        final list = prefs.getStringList('local_saved_recipes') ?? [];
+        list.remove(recipeId.toString());
+        await prefs.setStringList('local_saved_recipes', list);
+        debugPrint('DEBUG: local_saved_recipes after remove: $list');
       } else {
         // Panggil API SIMPAN
         await apiService.saveRecipe(_currentUserId, recipeId);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Resep "${recipe.title}" berhasil disimpan!')),
         );
+        // Simpan juga secara lokal sebagai fallback jika backend tidak expose saved list
+        final prefs = await SharedPreferences.getInstance();
+        final list = prefs.getStringList('local_saved_recipes') ?? [];
+        if (!list.contains(recipeId.toString())) {
+          list.add(recipeId.toString());
+          await prefs.setStringList('local_saved_recipes', list);
+        }
+        debugPrint('DEBUG: local_saved_recipes after add: $list');
       }
     } catch (e) {
       // 3. Rollback UI jika API gagal (Pessimistic Update)
@@ -207,13 +241,18 @@ class _HalamanResepState extends State<HalamanResep> {
                             recipe.id.toString(),
                           );
                           if (detail != null) {
-                            Navigator.push(
+                            await Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (context) =>
                                     DetailResep(resep: detail),
                               ),
                             );
+                            // Setelah kembali, reload saved status
+                            await _loadSavedRecipes();
+                            if (mounted) {
+                              setState(() {});
+                            }
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -225,12 +264,17 @@ class _HalamanResepState extends State<HalamanResep> {
                           }
                         } else {
                           // Jika resep lokal CI4, langsung navigasi (data sudah lengkap)
-                          Navigator.push(
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => DetailResep(resep: recipe),
                             ),
                           );
+                          // Setelah kembali, reload saved status
+                          await _loadSavedRecipes();
+                          if (mounted) {
+                            setState(() {});
+                          }
                         }
                       },
                       child: RecipeCard(

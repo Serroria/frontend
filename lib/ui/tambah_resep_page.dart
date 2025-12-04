@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../models/recipe_model.dart';
 
@@ -132,32 +133,48 @@ class _TambahResepPageState extends State<TambahResepPage> {
       setState(() => _isLoading = true);
 
       final Map<String, dynamic> dataToSubmit = {
-        'title': _titleController.text,
+        'title': _titleController.text.trim(),
         'kategori': _selectedKategori!,
-        'description': _descriptionController.text,
-        'ingredients': _ingredientsController.text,
-        'steps': _stepsController.text,
-        'time': _timeController.text,
-        'difficulty': _difficulty, // ✅ kalau belum mau pake rating
-        'user_id': 1,
+        'description': _descriptionController.text.trim(),
+        'ingredients': _ingredientsController.text.trim(),
+        'steps': _stepsController.text.trim(),
+        'time': _timeController.text.trim(),
+        'difficulty': _difficulty,
       };
 
       try {
-        // ✅ PANGGIL PAKE INSTANCE, JANGAN STATIC LAGI
-        if (_isEditing && widget.recipeToEdit!.id != null) {
-          // Panggil API UPDATE
+        if (_isEditing && widget.recipeToEdit != null) {
+          // --- MODE EDIT ---
+          print('DEBUG: Submitting EDIT - ID: ${widget.recipeToEdit!.id}');
+          print('DEBUG: Data: $dataToSubmit');
+
+          // Pastikan sertakan user_id saat update, agar backend dapat memvalidasi
+          final prefs = await SharedPreferences.getInstance();
+          final userId = prefs.getInt('userId');
+          if (userId != null) dataToSubmit['user_id'] = userId;
+
           await _apiService.updateRecipe(
-            widget.recipeToEdit!.id!,
+            widget.recipeToEdit!.id,
             dataToSubmit,
+            imageFile: _imageFile,
           );
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Resep berhasil diperbarui!")),
             );
           }
         } else {
-          // Panggil API POST (Tambah Baru)
+          // --- MODE TAMBAH BARU ---
+          print('DEBUG: Submitting CREATE - Data: $dataToSubmit');
+
+          // Ambil user_id dari SharedPreferences untuk POST baru
+          final prefs = await SharedPreferences.getInstance();
+          final userId = prefs.getInt('userId') ?? 1;
+          dataToSubmit['user_id'] = userId;
+
           await _apiService.postRecipe(dataToSubmit, _imageFile);
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Resep berhasil ditambahkan!")),
@@ -171,6 +188,7 @@ class _TambahResepPageState extends State<TambahResepPage> {
         }
       } catch (e) {
         if (mounted) {
+          print('DEBUG: Submit Error: $e');
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text("Gagal menyimpan resep: $e")));
@@ -379,7 +397,4 @@ class _TambahResepPageState extends State<TambahResepPage> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     );
   }
-
-  // ✅ OPTIONAL: special rename supaya gak tabrakan method lain
-  Widget _inputFieldWrapper() => const SizedBox.shrink();
 }

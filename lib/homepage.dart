@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uasmoba/services/api_service.dart';
 import 'package:uasmoba/services/the_meal_db_service.dart';
-import '../services/the_meal_db_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uasmoba/models/recipe_model.dart'; // Tambahkan import model RecipeModel
 // Asumsikan file login_page.dart berada di direktori yang sama
 import 'ui/login_page.dart';
@@ -25,7 +25,7 @@ class _HomePageState extends State<HomePage> {
   List<RecipeModel> _localNewRecipes = []; //dari lokal CI4
   bool _isLoading = true;
   String? _error;
-  final String _username = "User"; // Nanti diganti saat login dari backend
+  String _username = "User"; // Akan diisi dari SharedPreferences
 
   String _selectedCategory = 'Dessert';
 
@@ -41,7 +41,27 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _loadUsername();
     _fetchHomeData();
+  }
+
+  Future<void> _loadUsername() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final username = prefs.getString('username') ?? 'User';
+      if (mounted) {
+        setState(() {
+          _username = username;
+        });
+      }
+    } catch (e) {
+      print('Error loading username: $e');
+      if (mounted) {
+        setState(() {
+          _username = 'User';
+        });
+      }
+    }
   }
 
   // Fungsi untuk menangani logout dan navigasi ke halaman login
@@ -86,9 +106,11 @@ class _HomePageState extends State<HomePage> {
       debugPrint(tempError);
     }
 
-    // 2. Ambil data resep filter lokal (CI4)
+    // 2. Ambil data resep lokal terbaru (CI4)
     try {
-      localFiltered = await api.fetchFilteredLocalRecipes(_selectedCategory);
+      // Gunakan fetchRecipes() yang fetch semua resep lokal
+      // atau fallback ke kategori filter jika ada
+      localFiltered = await api.fetchRecipes();
     } catch (e) {
       tempError = (tempError ?? '') + '\nGagal memuat resep lokal: $e';
       debugPrint(e.toString());
@@ -321,33 +343,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  // ✅ Kita pertahankan 1 function recipe card
-  Widget _recipeCard(String title, int id) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.network(
-            "https://picsum.photos/id/$id/200",
-            width: 55,
-            height: 55,
-            fit: BoxFit.cover,
-          ),
-        ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: const Text("Cocok untuk menu harian kamu"),
-        trailing: const Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-          color: Colors.deepOrange,
         ),
       ),
     );

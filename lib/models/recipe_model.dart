@@ -60,9 +60,8 @@ class RecipeModel {
       rating: json['rating']?.toString() ?? '0',
 
       author: json['author'] ?? '-',
-      image: json['image'] != null
-          ? "http://10.0.2.2:8080/uploads/recipes/${json['image']}"
-          : null, // Ganti "" (string kosong) dengan null jika 'image' adalah String?
+      // Simpan nama file/gambar dari backend. UI akan membangun URL lengkap menggunakan ApiService.baseUrl.
+      image: json['image'] != null ? json['image'].toString() : null,
     );
   }
   factory RecipeModel.fromMealDbFilterJson(Map<String, dynamic> json) {
