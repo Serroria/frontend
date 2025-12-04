@@ -21,15 +21,57 @@ class _TambahResepPageState extends State<TambahResepPage> {
   final _apiService = ApiService(); // ✅ TARUH DISINI
 
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-  final TextEditingController _ingredientsController = TextEditingController();
-  final TextEditingController _stepsController = TextEditingController();
-  final TextEditingController _timeController = TextEditingController();
+  late TextEditingController _titleController = TextEditingController();
+  late TextEditingController _descriptionController = TextEditingController();
+  late TextEditingController _ingredientsController = TextEditingController();
+  late TextEditingController _stepsController = TextEditingController();
+  late TextEditingController _timeController = TextEditingController();
+
+  late bool _isEditing;
+
+  @override
+  void initState() {
+    super.initState();
+    // 1. Tentukan Mode: Edit atau Tambah
+    _isEditing = widget.recipeToEdit != null;
+
+    if (_isEditing) {
+      // --- MODE EDIT ---
+      final resep = widget.recipeToEdit!;
+
+      // A. Inisialisasi Controllers dengan data lama
+      _titleController = TextEditingController(text: resep.title);
+      _descriptionController = TextEditingController(text: resep.description);
+      _ingredientsController = TextEditingController(text: resep.ingredients);
+      _stepsController = TextEditingController(text: resep.steps);
+      _timeController = TextEditingController(text: resep.time);
+
+      // B. Inisialisasi Dropdown States
+      // Pastikan nilai default/lama ada di daftar _kategoriList
+      _selectedKategori = resep.kategori;
+      _difficulty = resep.difficulty;
+
+      // C. Atur _imageFile (Jika gambar lama tersedia, kita abaikan dulu file/URL-nya,
+      // tapi logikanya akan ada di sini jika Anda mau menampilkannya)
+      // Kita hanya bisa mengisi _imageFile jika itu adalah objek File lokal,
+      // bukan URL jaringan. Untuk edit, kita tampilkan gambar lama via URL jika tidak ada file baru.
+    } else {
+      // --- MODE TAMBAH BARU ---
+      _titleController = TextEditingController();
+      _descriptionController = TextEditingController();
+      _ingredientsController = TextEditingController();
+      _stepsController = TextEditingController();
+      _timeController = TextEditingController();
+
+      // Nilai default untuk dropdown
+      _selectedKategori = _kategoriList[0]; // Nusantara sebagai default
+      _difficulty = 'Mudah';
+    }
+  }
 
   File? _imageFile;
-  String? _selectedKategori;
-  String _difficulty = 'Mudah';
+  late String? _selectedKategori;
+  late String _difficulty = 'Mudah';
 
   final List<String> _difficultyLevels = ['Mudah', 'Sedang', 'Sulit'];
   final List<String> _kategoriList = [
@@ -54,31 +96,57 @@ class _TambahResepPageState extends State<TambahResepPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _ingredientsController.dispose();
+    _stepsController.dispose();
+    _timeController.dispose();
+    super.dispose();
+  }
+
   void _submitRecipe() async {
     if (_formKey.currentState!.validate() && _selectedKategori != null) {
       setState(() => _isLoading = true);
 
-      final Map<String, dynamic> newRecipeData = {
+      final Map<String, dynamic> dataToSubmit = {
         'title': _titleController.text,
         'kategori': _selectedKategori!,
         'description': _descriptionController.text,
         'ingredients': _ingredientsController.text,
         'steps': _stepsController.text,
         'time': _timeController.text,
-        'difficulty': _difficulty,
-        'rating': 0, // ✅ kalau belum mau pake rating
+        'difficulty': _difficulty, // ✅ kalau belum mau pake rating
         'user_id': 1,
       };
 
       try {
         // ✅ PANGGIL PAKE INSTANCE, JANGAN STATIC LAGI
-        final result = await _apiService.postRecipe(newRecipeData, _imageFile);
+        if (_isEditing && widget.recipeToEdit!.id != null) {
+          // Panggil API UPDATE
+          await _apiService.updateRecipe(
+            widget.recipeToEdit!.id!,
+            dataToSubmit,
+          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Resep berhasil diperbarui!")),
+            );
+          }
+        } else {
+          // Panggil API POST (Tambah Baru)
+          await _apiService.postRecipe(dataToSubmit, _imageFile);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Resep berhasil ditambahkan!")),
+            );
+          }
+        }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Resep berhasil disimpan!")),
-          );
-          Navigator.pop(context, result);
+          // Kirim sinyal refresh ke halaman sebelumnya
+          Navigator.pop(context, true);
         }
       } catch (e) {
         if (mounted) {
@@ -93,23 +161,13 @@ class _TambahResepPageState extends State<TambahResepPage> {
   }
 
   @override
-  void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _ingredientsController.dispose();
-    _stepsController.dispose();
-    _timeController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          "Tambah Resep Baru",
+        title: Text(
+          _isEditing ? 'Edit Resep' : "Tambah Resep Baru",
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         leading: IconButton(

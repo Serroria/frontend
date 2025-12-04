@@ -250,7 +250,7 @@ class ApiService {
 
   // contoh delete (pastikan route di backend tersedia: DELETE /recipes/{id} atau /resep/{id})
   Future<bool> deleteRecipe(int id) async {
-    final uri = Uri.parse('$_baseUrl/recipes/$id'); // sesuaikan route backend
+    final uri = Uri.parse('$_baseUrl/resep/$id'); // sesuaikan route backend
     final response = await http.delete(uri, headers: await _getAuthHeaders());
     if (response.statusCode == 200 || response.statusCode == 204) {
       return true;
