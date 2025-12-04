@@ -26,6 +26,7 @@ class _TambahResepPageState extends State<TambahResepPage> {
   late TextEditingController _ingredientsController = TextEditingController();
   late TextEditingController _stepsController = TextEditingController();
   late TextEditingController _timeController = TextEditingController();
+  bool _isPickingImage = false;
 
   late bool _isEditing;
 
@@ -70,6 +71,7 @@ class _TambahResepPageState extends State<TambahResepPage> {
   }
 
   File? _imageFile;
+  final ImagePicker _picker = ImagePicker();
   late String? _selectedKategori;
   late String _difficulty = 'Mudah';
 
@@ -85,13 +87,32 @@ class _TambahResepPageState extends State<TambahResepPage> {
   bool _isLoading = false;
 
   Future<void> _pickImage() async {
-    final pickedFile = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-    );
+    // 1. Cek status: Jika sedang memilih gambar, keluar dari fungsi.
+    if (_isPickingImage) {
+      return;
+    }
 
-    if (pickedFile != null) {
+    // 2. Set status menjadi aktif dan perbarui UI (jika diperlukan)
+    setState(() {
+      _isPickingImage = true;
+    });
+
+    try {
+      final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+
+      if (pickedFile != null) {
+        // Hanya perbarui state jika file ditemukan
+        setState(() {
+          _imageFile = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      // Menangkap error Image Picker (termasuk 'already_active')
+      print('Terjadi error saat memilih gambar: $e');
+    } finally {
+      // 3. SELALU set status kembali menjadi non-aktif setelah proses selesai (di try atau catch)
       setState(() {
-        _imageFile = File(pickedFile.path);
+        _isPickingImage = false;
       });
     }
   }

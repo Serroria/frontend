@@ -17,13 +17,99 @@ class _HalamanResepState extends State<HalamanResep> {
   final ApiService apiService = ApiService();
   final TheMealDbService dbApiService = TheMealDbService();
 
+  Set<int> _savedRecipeIds = {};
+  // ✅ DUMMY USER ID: Ganti dengan ID user yang sebenarnya dari SharedPrefs
+  final int _currentUserId = 1;
+
   @override
   void initState() {
     super.initState();
+    // Panggil _loadSavedRecipes sebelum _fetchAndMergeRecipes
+    _loadSavedRecipes();
     _futureRecipes = _fetchAndMergeRecipes();
   }
 
-  // lib/ui/halaman_resep.dart (di dalam class _HalamanResepState)
+  // 👇 FUNGSI LENGKAP: Memuat ID Resep yang Disimpan
+  Future<void> _loadSavedRecipes() async {
+    // ASUMSI: Anda punya API endpoint yang mengembalikan LIST ID yang disimpan
+    // API Service Anda harus memiliki metode seperti 'fetchSavedRecipeIds(userId)'
+    // Untuk demo, kita set dummy ID
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) {
+      try {
+        // Contoh: Mengambil ID dari API
+        // final savedIds = await apiService.fetchSavedRecipeIds(_currentUserId);
+
+        // Menggunakan data dummy untuk demonstrasi
+        final savedIds = {52857, 101, 53049};
+
+        setState(() {
+          _savedRecipeIds = savedIds;
+        });
+        debugPrint('Resep yang disimpan dimuat: $_savedRecipeIds');
+      } catch (e) {
+        debugPrint('Gagal memuat resep yang disimpan: $e');
+        // Biarkan _savedRecipeIds kosong jika gagal
+      }
+    }
+  }
+  // 👆 FUNGSI LENGKAP
+
+  // 👇 FUNGSI LENGKAP: Menangani Tombol Simpan/Hapus Simpan
+  void _handleSaveToggle(RecipeModel recipe) async {
+    if (recipe.id == null || recipe.id == 0) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ID Resep tidak valid.')));
+      return;
+    }
+
+    final isCurrentlySaved = _savedRecipeIds.contains(recipe.id);
+    final recipeId = recipe.id!;
+
+    // 1. Feedback UI cepat (Optimistic Update)
+    setState(() {
+      if (isCurrentlySaved) {
+        _savedRecipeIds.remove(recipeId);
+      } else {
+        _savedRecipeIds.add(recipeId);
+      }
+    });
+
+    // 2. Panggil API untuk Menyimpan/Menghapus
+    try {
+      if (isCurrentlySaved) {
+        // Panggil API HAPUS
+        await apiService.removeSavedRecipe(_currentUserId, recipeId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Resep "${recipe.title}" dihapus dari simpanan.'),
+          ),
+        );
+      } else {
+        // Panggil API SIMPAN
+        await apiService.saveRecipe(_currentUserId, recipeId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Resep "${recipe.title}" berhasil disimpan!')),
+        );
+      }
+    } catch (e) {
+      // 3. Rollback UI jika API gagal (Pessimistic Update)
+      if (mounted) {
+        setState(() {
+          if (isCurrentlySaved) {
+            _savedRecipeIds.add(recipeId); // Tambahkan kembali jika gagal hapus
+          } else {
+            _savedRecipeIds.remove(recipeId); // Hapus kembali jika gagal simpan
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan perubahan: $e')),
+        );
+      }
+    }
+  }
+  // 👆 FUNGSI LENGKAP
 
   Future<List<RecipeModel>> _fetchAndMergeRecipes() async {
     List<RecipeModel> combinedRecipes = [];
@@ -83,65 +169,85 @@ class _HalamanResepState extends State<HalamanResep> {
                 child: Text('Tidak ada data resep yang tersedia.'),
               );
             }
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(12.0),
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: recipes.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 10.0,
-                  mainAxisSpacing: 10.0,
-                  childAspectRatio: 0.7,
-                ),
-                itemBuilder: (context, index) {
-                  final recipe = recipes[index];
-                  final isExternal = recipe.author == 'TheMealDB';
-                  // Meneruskan data dari Model ke Partial Card
-                  return GestureDetector(
-                    onTap: () async {
-                      if (isExternal) {
-                        // Jika dari TheMealDB, fetch detail lengkap sebelum navigasi
-                        final detail = await dbApiService.lookupMealDetail(
-                          recipe.id.toString(),
-                        );
-                        if (detail != null) {
+            return RefreshIndicator(
+              // 💡 Tambahkan RefreshIndicator untuk memuat ulang data
+              onRefresh: () async {
+                setState(() {
+                  // Muat ulang daftar resep dan status tersimpan
+                  _futureRecipes = _fetchAndMergeRecipes();
+                  _loadSavedRecipes();
+                });
+                await _futureRecipes; // Tunggu hingga selesai
+              },
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(12.0),
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: recipes.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 10.0,
+                    mainAxisSpacing: 10.0,
+                    childAspectRatio: 0.7,
+                  ),
+                  itemBuilder: (context, index) {
+                    final recipe = recipes[index];
+                    final isExternal = recipe.author == 'TheMealDB';
+                    final isSaved = _savedRecipeIds.contains(
+                      recipe.id,
+                    ); // 💡 Cek status tersimpan
+
+                    // Meneruskan data dari Model ke Partial Card
+                    return GestureDetector(
+                      onTap: () async {
+                        if (isExternal) {
+                          // Jika dari TheMealDB, fetch detail lengkap sebelum navigasi
+                          final detail = await dbApiService.lookupMealDetail(
+                            recipe.id.toString(),
+                          );
+                          if (detail != null) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    DetailResep(resep: detail),
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Detail resep eksternal gagal dimuat',
+                                ),
+                              ),
+                            );
+                          }
+                        } else {
+                          // Jika resep lokal CI4, langsung navigasi (data sudah lengkap)
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => DetailResep(resep: detail),
-                            ),
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Detail resep eksternal gagal dimuat',
-                              ),
+                              builder: (context) => DetailResep(resep: recipe),
                             ),
                           );
                         }
-                      } else {
-                        // Jika resep lokal CI4, langsung navigasi (data sudah lengkap)
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => DetailResep(resep: recipe),
-                          ),
-                        );
-                      }
-                    },
-                    child: RecipeCard(
-                      imageUrl: recipe.image ?? '',
-                      title: recipe.title,
-                      kategori: recipe.kategori,
-                      rating: recipe.rating.toString(),
-                      difficulty: recipe.difficulty,
-                      author: recipe.author,
-                    ),
-                  );
-                },
+                      },
+                      child: RecipeCard(
+                        imageUrl: recipe.image ?? '',
+                        title: recipe.title,
+                        kategori: recipe.kategori,
+                        rating: recipe.rating.toString(),
+                        difficulty: recipe.difficulty,
+                        author: recipe.author,
+                        // 💡 Tambahkan properti untuk menangani simpanan
+                        isSaved: isSaved,
+                        onSaveTapped: () =>
+                            _handleSaveToggle(recipe), // 💡 Panggil handler
+                      ),
+                    );
+                  },
+                ),
               ),
             );
           }
@@ -151,98 +257,3 @@ class _HalamanResepState extends State<HalamanResep> {
     );
   }
 }
-
-// class HalamanResep extends StatelessWidget {
-  // Simulasi Data yang sudah di-fetch dan di-decode dari JSON
-  // static const List<Map<String, dynamic>> dummyRecipes = [
-  //   {
-  //     'title': 'Bening Sawi Jagung',
-  //     'imageUrl':
-  //         'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ-i5vY9awY9Ql0bKrXHmecMC2kfCVWPGDIZOJJIx1gHR5lFMBW0ISMp9DwAS9oevv3FkKfzd4cfo_DqjiQfD79X3mdfniidbacWUiXw9UX&s=10',
-  //     'rating': 5.0,
-  //     'steps': 5,
-  //     'kategori': 'asia',
-  //     'difficulty': 'sedang',
-  //     'author': 'Ovie Kholifatun',
-  //   },
-  //   {
-  //     'title': 'Alpukat Kocok',
-  //     'imageUrl': 'URL_ALPUKAT_KOCOK',
-  //     'rating': 4.6,
-  //     'steps': 5,
-  //     'kategori': 'asia',
-  //     'difficulty': 'sedang',
-  //     'author': 'Yummy Official',
-  //   },
-  //   {
-  //     'title': 'Bumbu Dasar Putih #YummyResepDasar',
-  //     'imageUrl': 'URL_BUMBU_PUTIH',
-  //     'rating': 4.8,
-  //     'steps': 20,
-  //     'kategori': 'asia',
-  //     'difficulty': 'sedang',
-  //     'author': 'Yummy Official',
-  //   },
-  //   {
-  //     'title': 'Pisang Caramel',
-  //     'imageUrl': 'URL_PISANG_CARAMEL',
-  //     'rating': 4.9,
-  //     'steps': 5,
-  //     'kategori': 'asia',
-  //     'difficulty': 'sedang',
-  //     'author': 'Mama Queen',
-  //   },
-  // ];
-
-  // final List<Map<String, dynamic>> recipes = dummyRecipes;
-
-//   const HalamanResep({super.key});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     // TODO: implement build
-//     return Scaffold(
-//       appBar: AppBar(centerTitle: true, title: Text('Resep-resep')),
-//       body: SingleChildScrollView(
-//         padding: const EdgeInsets.all(12.0),
-//         child: Column(
-//           children: [
-//             GridView.builder(
-//               // Properti Penting untuk GridView di dalam SingleChildScrollView
-//               shrinkWrap: true, // Membuat GridView hanya sebesar isinya
-//               physics:
-//                   const NeverScrollableScrollPhysics(), // Menonaktifkan scroll GridView, agar scroll ditangani oleh SingleChildScrollView
-
-//               itemCount: recipes.length, // Jumlah item (data resep)
-//               // Delegasi untuk mengatur tata letak Grid
-//               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-//                 crossAxisCount: 2, // 2 kolom
-//                 crossAxisSpacing: 10.0, // Jarak horizontal antar Card
-//                 mainAxisSpacing: 10.0, // Jarak vertikal antar Card
-//                 childAspectRatio:
-//                     0.7, // Rasio lebar/tinggi (untuk memastikan Card cukup tinggi)
-//               ),
-//               // Fungsi yang membangun setiap item Grid
-//               itemBuilder: (context, index) {
-//                 final recipe = recipes[index];
-
-//                 // ➡️ PANGGILAN PARTIAL CARD ANDA DI SINI
-//                 return RecipeCard(
-//                   // Meneruskan data dari list ke constructor RecipeCard
-//                   imageUrl: recipe['imageUrl'] ?? 'placeholder_url',
-//                   title: recipe['title'],
-//                   rating: recipe['rating'].toString(),
-//                   steps: recipe['steps'],
-//                   kategori: recipe['kategori'],
-//                   difficulty: recipe['difficulty'],
-//                   author: recipe['author'],
-//                   // Opsional: key: ValueKey(recipe['id']),
-//                 );
-//               },
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-// }

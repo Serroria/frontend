@@ -1,16 +1,60 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ Import untuk SharedPrefs
+import '../services/api_service.dart';
+import '../models/recipe_model.dart';
+import '../widgets/card_recipe.dart';
 import 'edit_profile_page.dart';
+import './detail_resep.dart';
 
-class ProfilePage extends StatelessWidget {
+// =======================================================
+// A. MAIN PROFILE PAGE (STATEFUL)
+// =======================================================
+
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    const String _handle = "@cook_180405000";
-    const String _displayName = "Marsha Daviena";
+  State<ProfilePage> createState() => _ProfilePageState();
+}
 
+class _ProfilePageState extends State<ProfilePage> {
+  final ApiService _api = ApiService(); // Digunakan untuk mendapatkan Base URL
+  int? _userId;
+  String _displayName = "Memuat...";
+  String _handle = "@loading";
+  int _totalRecipes = 0; // Akan diupdate oleh salah satu tab
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileData();
+  }
+
+  Future<void> _loadProfileData() async {
+    // Di dunia nyata, Anda akan memanggil API profil dan SharedPrefs
+    final prefs = await SharedPreferences.getInstance();
+    // Asumsi ID user disimpan di SharedPrefs setelah login
+    final fetchedUserId =
+        prefs.getInt('userId') ?? 1; // Default ke ID 1 jika tidak ada
+
+    // ASUMSI: Ambil data nama dan handle dari API /profile/{userId}
+    // Untuk demo, kita set dummy
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    if (mounted) {
+      setState(() {
+        _userId = fetchedUserId;
+        _displayName = "Marsha Daviena";
+        _handle = "@cook_180405000";
+        // _totalRecipes akan diisi setelah tab resep selesai fetch
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2, // "Resep Saya" & "Resep Disimpan"
+      length: 2,
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
@@ -49,7 +93,7 @@ class ProfilePage extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Foto profil (sementara icon)
+                  // Foto profil
                   CircleAvatar(
                     radius: 32,
                     backgroundColor: Colors.deepPurple,
@@ -80,9 +124,12 @@ class ProfilePage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          "Resep: 2", // dummy data
-                          style: TextStyle(fontSize: 13, color: Colors.black87),
+                        Text(
+                          "Resep: $_totalRecipes",
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.black87,
+                          ),
                         ),
                       ],
                     ),
@@ -105,7 +152,7 @@ class ProfilePage extends StatelessWidget {
                 ),
                 indicatorWeight: 2,
                 tabs: const [
-                  Tab(text: "Resep Saya!!!"),
+                  Tab(text: "Resep Saya"), // Perbaiki typo "!!!"
                   Tab(text: "Resep Disimpan"),
                 ],
               ),
@@ -113,16 +160,22 @@ class ProfilePage extends StatelessWidget {
             const SizedBox(height: 8),
 
             // ISI TAB
-            const Expanded(
+            Expanded(
               child: TabBarView(
                 children: [
                   _ProfileRecipeTab(
                     emptyText: "Belum ada resep yang kamu buat.",
-                    isSavedRecipes: false, // Flag untuk card resep yang dibuat
+                    isSavedRecipes: false,
+                    userId: _userId, // ✅ Teruskan ID User
+                    onCountUpdate: (count) {
+                      // Callback untuk update total resep
+                      setState(() => _totalRecipes = count);
+                    },
                   ),
                   _ProfileRecipeTab(
                     emptyText: "Belum ada resep yang kamu simpan.",
-                    isSavedRecipes: true, // Flag untuk card resep yang disimpan
+                    isSavedRecipes: true,
+                    userId: _userId, // ✅ Teruskan ID User
                   ),
                 ],
               ),
@@ -134,133 +187,154 @@ class ProfilePage extends StatelessWidget {
   }
 }
 
-class _ProfileRecipeTab extends StatelessWidget {
+// =======================================================
+// B. PROFILE RECIPE TAB (STATEFUL)
+// =======================================================
+
+class _ProfileRecipeTab extends StatefulWidget {
   final String emptyText;
   final bool isSavedRecipes;
+  final int? userId;
+  final Function(int)? onCountUpdate; // Callback untuk update total resep
 
   const _ProfileRecipeTab({
     required this.emptyText,
-    this.isSavedRecipes = false,
+    required this.isSavedRecipes,
+    this.userId,
+    this.onCountUpdate,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(
-            scrollDirection: Axis.horizontal, // Horizontal scrolling
-            children: isSavedRecipes
-                ? [
-                    _buildRecipeCard(
-                      imageUrl: 'https://picsum.photos/id/204/200',
-                      title: 'Kuotie Ayam',
-                      description: 'Kuotie ayam lezat dengan sambal manis',
-                      rating: 4.7,
-                      duration: 30,
-                      difficulty: 'Mudah',
-                      username: 'susanti',
-                    ),
-                    _buildRecipeCard(
-                      imageUrl: 'https://picsum.photos/id/203/200',
-                      title: 'Wedang Kopi Jahe',
-                      description: 'Kopi jahe hangat dengan rempah beraroma',
-                      rating: 5.0,
-                      duration: 25,
-                      difficulty: 'Mudah',
-                      username: 'meymey',
-                    ),
-                  ]
-                : [
-                    _buildRecipeCard(
-                      imageUrl: 'https://picsum.photos/id/200/200',
-                      title: 'Nasi Goreng Spesial',
-                      description: 'Nasi goreng dengan bumbu rahasia keluarga',
-                      rating: 4.8,
-                      duration: 30,
-                      difficulty: 'mudah',
-                      username: 'Marsha Daviena',
-                    ),
-                    _buildRecipeCard(
-                      imageUrl: 'https://picsum.photos/id/201/200',
-                      title: 'Soto Ayam Lamongan',
-                      description: 'Soto ayam dengan koya khas lamongan',
-                      rating: 4.9,
-                      duration: 45,
-                      difficulty: 'Sedang',
-                      username: 'Marsha Daviena',
-                    ),
-                  ],
-          ),
-        ),
-      ],
-    );
+  // Perbaiki typo "e" di _ProfileRecipeTabeState
+  State<_ProfileRecipeTab> createState() => _ProfileRecipeTabState();
+}
+
+class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
+  final ApiService api = ApiService();
+  List<RecipeModel> _recipes = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // Panggil fetch hanya jika userId sudah tersedia
+    if (widget.userId != null) {
+      _fetchRecipes();
+    }
   }
 
-  Widget _buildRecipeCard({
-    required String imageUrl,
-    required String title,
-    required String description,
-    required double rating,
-    required int duration,
-    required String difficulty,
-    required String username,
-  }) {
-    return Container(
-      width: 200,
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        elevation: 4,
-        child: Column(
-          children: [
-            // Username di atas gambar resep
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                '$username',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade700,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            // Gambar resep
-            Image.network(imageUrl, width: 200, height: 120, fit: BoxFit.cover),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Text(
-                description,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.star, color: Colors.orange, size: 16),
-                Text('$rating'),
-                const SizedBox(width: 8),
-                const Icon(Icons.access_time, size: 16),
-                Text('$duration min'),
-                const SizedBox(width: 8),
-                const Icon(Icons.flag, size: 16),
-                Text(difficulty),
-              ],
-            ),
-          ],
-        ),
+  @override
+  void didUpdateWidget(covariant _ProfileRecipeTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Panggil fetch jika ID user baru tersedia (misal saat login selesai)
+    if (widget.userId != oldWidget.userId && widget.userId != null) {
+      _fetchRecipes();
+    }
+  }
+
+  Future<void> _fetchRecipes() async {
+    if (widget.userId == null) {
+      if (mounted)
+        setState(
+          () => {_error = "User ID tidak ditemukan", _isLoading = false},
+        );
+      return;
+    }
+
+    try {
+      List<RecipeModel> fetchedData = [];
+
+      if (widget.isSavedRecipes) {
+        final savedIds = await api.fetchSavedRecipeIds(widget.userId!);
+        // ambil detail resep berdasarkan ID
+
+        for (var id in savedIds) {
+          final resep = await api.fetchUserRecipeById(id); // Buat fungsi baru
+          if (resep != null) fetchedData.add(resep);
+        }
+      } else {
+        // Ambil resep user langsung
+        fetchedData = await api.fetchUserRecipes(widget.userId!);
+      }
+
+      if (mounted) {
+        setState(() {
+          _recipes = fetchedData;
+          _isLoading = false;
+          _error = null;
+        });
+        // Update total resep di ProfilePage
+        if (!widget.isSavedRecipes && widget.onCountUpdate != null) {
+          widget.onCountUpdate!(_recipes.length);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(child: Text('Error: $_error'));
+    }
+    if (_recipes.isEmpty) {
+      return Center(child: Text(widget.emptyText));
+    }
+
+    // Tampilan Grid untuk Resep
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        // ✅ SESUAIKAN ASPECT RATIO AGAR CARD MUAT VERTIKAL
+        childAspectRatio: 0.7,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
       ),
+      itemCount: _recipes.length,
+      itemBuilder: (context, index) {
+        final resep = _recipes[index];
+
+        // 1. Build URL Gambar
+        String imageUrl = resep.image ?? '';
+        if (imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
+          // Ganti /uploads/receipes/ menjadi /uploads/recipes/ (perhatikan typo)
+          imageUrl = '${api.baseUrl}/uploads/recipes/$imageUrl';
+        } else if (imageUrl.isEmpty) {
+          imageUrl = 'https://via.placeholder.com/200';
+        }
+
+        // ✅ NAVIGASI DAN CARD
+        return GestureDetector(
+          onTap: () {
+            // Navigasi ke Detail Resep
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => DetailResep(resep: resep),
+              ),
+            );
+          },
+          child: RecipeCard(
+            imageUrl: imageUrl,
+            title: resep.title,
+            rating: resep.rating,
+            kategori: resep.kategori,
+            difficulty: resep.difficulty,
+            author: resep.author,
+          ),
+        );
+      },
     );
   }
 }

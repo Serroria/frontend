@@ -9,6 +9,9 @@ class RecipeCard extends StatelessWidget {
   final String difficulty;
   final String author;
 
+  final VoidCallback? onSaveTapped;
+  final bool isSaved;
+
   const RecipeCard({
     super.key,
     required this.imageUrl,
@@ -18,6 +21,8 @@ class RecipeCard extends StatelessWidget {
     required this.kategori,
     required this.difficulty,
     required this.author,
+    this.onSaveTapped,
+    this.isSaved = false,
   });
 
   @override
@@ -42,10 +47,8 @@ class RecipeCard extends StatelessWidget {
         children: [
           //gambar
           ClipRRect(
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(10),
-              topRight: Radius.circular(10),
-            ),
+            borderRadius: BorderRadius.circular(10),
+
             child: Image.network(
               imageUrl.isNotEmpty
                   ? imageUrl
@@ -104,7 +107,18 @@ class RecipeCard extends StatelessWidget {
                     // ),
                     // Spacer(),
                     Spacer(), // Mendorong widget berikutnya ke kanan
-                    Icon(Icons.bookmark_border, color: Colors.grey, size: 20),
+                    GestureDetector(
+                      onTap: onSaveTapped, // Panggil callback saat ikon diklik
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 4.0),
+                        child: Icon(
+                          // ✅ Ubah ikon berdasarkan state isSaved
+                          isSaved ? Icons.bookmark : Icons.bookmark_border,
+                          color: isSaved ? Colors.deepOrange : Colors.grey,
+                          size: 20,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 SizedBox(height: 8),
