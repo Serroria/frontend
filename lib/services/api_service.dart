@@ -18,10 +18,13 @@ class TokenExpiredException implements Exception {
 }
 
 class ApiService {
-  // ✅ Base URL conditional untuk Web/Emulator
-  static const String _baseUrl = (kIsWeb)
-      ? "http://localhost:8080"
-      : "http://10.0.2.2:8080";
+  // Base URL conditional untuk Web / Windows desktop / Android emulator
+  static String get _baseUrl {
+    if (kIsWeb) return 'http://localhost:8080';
+    if (Platform.isWindows) return 'http://localhost:8080';
+    // Android emulator forwards 10.0.2.2 to host machine
+    return 'http://10.0.2.2:8080';
+  }
   // final String _baseUrl = "http://10.0.2.2:8080";
 
   // ✅ Helper function untuk header
@@ -88,7 +91,7 @@ class ApiService {
     }
   }
 
-  // 2️⃣ LOGIN
+  // ⿢ LOGIN
   Future<LoginResponse> login(String email, String password) async {
     final url = Uri.parse('$_baseUrl/login');
 
@@ -155,6 +158,125 @@ class ApiService {
       throw TokenExpiredException();
     } else {
       throw Exception('Gagal memuat resep, status: ${response.statusCode}');
+    }
+  }
+
+  // 4️⃣ AMBIL USERNAME/PROFILE
+  // Mencoba ambil username dari SharedPreferences terlebih dahulu,
+  // jika tidak ada, request ke endpoint user berdasarkan user_id.
+  Future<String?> getUsername() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString('username');
+    if (stored != null && stored.isNotEmpty) return stored;
+
+    final userId = prefs.getInt('user_id');
+    if (userId == null) return null;
+
+    final url = Uri.parse('$_baseUrl/users/$userId');
+    try {
+      final response = await http.get(url, headers: await _getAuthHeaders());
+      if (response.statusCode == 200) {
+        final jsonMap = jsonDecode(response.body);
+        // Coba berbagai kunci umum yang mungkin dikembalikan API
+        String? name;
+        if (jsonMap is Map<String, dynamic>) {
+          name = (jsonMap['nama'] ?? jsonMap['name'] ?? jsonMap['username'])
+              ?.toString();
+          // Jika API mengemas di bawah 'data' -> 'user'
+          if (name == null && jsonMap['data'] is Map) {
+            final data = jsonMap['data'] as Map<String, dynamic>;
+            name = (data['nama'] ?? data['name'] ?? data['username'])
+                ?.toString();
+            if (name == null && data['user'] is Map) {
+              final user = data['user'] as Map<String, dynamic>;
+              name = (user['nama'] ?? user['name'] ?? user['username'])
+                  ?.toString();
+            }
+          }
+        }
+
+        if (name != null && name.isNotEmpty) {
+          await prefs.setString('username', name);
+          return name;
+        }
+
+        return null;
+      } else if (response.statusCode == 401) {
+        throw TokenExpiredException();
+      } else {
+        return null;
+      }
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Ambil profile lengkap dari backend
+  Future<Map<String, dynamic>?> getProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getInt('user_id');
+    if (userId == null) return null;
+
+    final url = Uri.parse('$_baseUrl/users/$userId');
+    try {
+      final response = await http.get(url, headers: await _getAuthHeaders());
+      if (response.statusCode == 200) {
+        final jsonMap = jsonDecode(response.body);
+        if (jsonMap is Map<String, dynamic>) {
+          // try to find data.user or data
+          if (jsonMap['data'] is Map && jsonMap['data']['user'] is Map) {
+            return Map<String, dynamic>.from(jsonMap['data']['user']);
+          }
+          if (jsonMap['data'] is Map)
+            return Map<String, dynamic>.from(jsonMap['data']);
+          return Map<String, dynamic>.from(jsonMap);
+        }
+        return null;
+      } else if (response.statusCode == 401) {
+        throw TokenExpiredException();
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Update profile (optional avatar image)
+  // Expects keys: nama, username, email, about (or other fields) in data
+  Future<Map<String, dynamic>> updateProfile(
+    Map<String, String> data,
+    File? imageFile,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getInt('user_id');
+    if (userId == null) throw Exception('User ID tidak ditemukan');
+
+    var uri = Uri.parse('$_baseUrl/users/$userId/update');
+    var request = http.MultipartRequest('POST', uri);
+    request.headers.addAll(await _getAuthHeaders());
+
+    data.forEach((k, v) {
+      request.fields[k] = v;
+    });
+
+    if (imageFile != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath('avatar', imageFile.path),
+      );
+    }
+
+    try {
+      final streamed = await request.send();
+      final body = await streamed.stream.bytesToString();
+      if (streamed.statusCode == 200 || streamed.statusCode == 201) {
+        return jsonDecode(body) as Map<String, dynamic>;
+      } else if (streamed.statusCode == 401) {
+        throw TokenExpiredException();
+      } else {
+        throw Exception('Gagal memperbarui profil: ${streamed.statusCode}');
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 

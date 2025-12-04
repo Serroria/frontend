@@ -1,30 +1,76 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
+import 'edit_profile_page.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    const String _handle = "@cook_180405000";
-    const String _displayName = "Marsha Daviena";
+  State<ProfilePage> createState() => _ProfilePageState();
+}
 
+class _ProfilePageState extends State<ProfilePage> {
+  final ApiService _api = ApiService();
+  Map<String, dynamic>? _profile;
+  bool _loading = true;
+  String _username = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsername();
+  }
+
+  Future<void> _loadUsername() async {
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString('username') ?? 'User';
+    setState(() => _username = username);
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() => _loading = true);
+    final profile = await _api.getProfile();
+    if (!mounted) return;
+    setState(() {
+      _profile = profile;
+      _loading = false;
+    });
+  }
+
+  void _openEdit() async {
+    final updated = await Navigator.push<Map<String, dynamic>?>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProfilePage(initialProfile: _profile),
+      ),
+    );
+
+    if (updated != null) {
+      setState(() {
+        _profile = updated;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2, // "Resep Saya" & "Resep Disimpan"
+      length: 2,
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
-          title: const Text("Profil"),
+          title: const Text('Profil'),
           centerTitle: true,
           elevation: 0,
           backgroundColor: Colors.white,
           foregroundColor: Colors.black87,
           actions: [
             TextButton(
-              onPressed: () {
-                // Navigate to edit profile page
-              },
+              onPressed: _openEdit,
               child: const Text(
-                "Edit",
+                'Edit',
                 style: TextStyle(
                   color: Colors.deepOrange,
                   fontWeight: FontWeight.w600,
@@ -36,57 +82,13 @@ class ProfilePage extends StatelessWidget {
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // HEADER PROFIL (foto + nama + total resep)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              color: Colors.white,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Foto profil (sementara icon)
-                  CircleAvatar(
-                    radius: 32,
-                    backgroundColor: Colors.deepPurple,
-                    child: const Icon(
-                      Icons.person,
-                      size: 32,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _displayName,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _handle,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          "Resep: 2", // dummy data
-                          style: TextStyle(fontSize: 13, color: Colors.black87),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _loading
+                ? const Padding(
+                    padding: EdgeInsets.all(24.0),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : _buildHeader(),
             const Divider(height: 1),
-
-            // TAB BAR: Resep Saya | Resep Disimpan
             Material(
               color: Colors.white,
               child: TabBar(
@@ -99,24 +101,24 @@ class ProfilePage extends StatelessWidget {
                 ),
                 indicatorWeight: 2,
                 tabs: const [
-                  Tab(text: "Resep Saya"),
-                  Tab(text: "Resep Disimpan"),
+                  Tab(text: 'Resep Saya'),
+                  Tab(text: 'Resep Disimpan'),
                 ],
               ),
             ),
             const SizedBox(height: 8),
-
-            // ISI TAB
-            const Expanded(
+            Expanded(
               child: TabBarView(
                 children: [
                   _ProfileRecipeTab(
-                    emptyText: "Belum ada resep yang kamu buat.",
-                    isSavedRecipes: false, // Flag untuk card resep yang dibuat
+                    emptyText: 'Belum ada resep yang kamu buat.',
+                    isSavedRecipes: false,
+                    username: _username,
                   ),
                   _ProfileRecipeTab(
-                    emptyText: "Belum ada resep yang kamu simpan.",
-                    isSavedRecipes: true, // Flag untuk card resep yang disimpan
+                    emptyText: 'Belum ada resep yang kamu simpan.',
+                    isSavedRecipes: true,
+                    username: _username,
                   ),
                 ],
               ),
@@ -126,15 +128,77 @@ class ProfilePage extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildHeader() {
+    final displayName = _username.isNotEmpty ? _username : 'User';
+    final handle =
+        (_profile?['handle'] ?? _profile?['username'])?.toString() ?? '';
+    final avatar = (_profile?['avatar'] ?? _profile?['avatar_url'])?.toString();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      color: Colors.white,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 32,
+            backgroundColor: Colors.deepPurple,
+            backgroundImage: avatar != null && avatar.isNotEmpty
+                ? NetworkImage(avatar)
+                : null,
+            child: avatar == null || avatar.isEmpty
+                ? Text(
+                    displayName.isNotEmpty ? displayName[0] : 'U',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                if (handle.isNotEmpty)
+                  Text(
+                    handle,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                  ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Resep: 2',
+                  style: TextStyle(fontSize: 13, color: Colors.black87),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ProfileRecipeTab extends StatelessWidget {
   final String emptyText;
   final bool isSavedRecipes;
+  final String username;
 
   const _ProfileRecipeTab({
     required this.emptyText,
     this.isSavedRecipes = false,
+    required this.username,
   });
 
   @override
@@ -173,7 +237,7 @@ class _ProfileRecipeTab extends StatelessWidget {
                       rating: 4.8,
                       duration: 30,
                       difficulty: 'mudah',
-                      username: 'Marsha Daviena',
+                      username: username,
                     ),
                     _buildRecipeCard(
                       imageUrl: 'https://picsum.photos/id/201/200',
@@ -182,7 +246,7 @@ class _ProfileRecipeTab extends StatelessWidget {
                       rating: 4.9,
                       duration: 45,
                       difficulty: 'Sedang',
-                      username: 'Marsha Daviena',
+                      username: username,
                     ),
                   ],
           ),

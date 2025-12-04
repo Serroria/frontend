@@ -3,12 +3,14 @@ class LoginResponse {
   final String token;
   final String userEmail;
   final int userId;
+  final String? userName;
 
   LoginResponse({
     required this.status,
     required this.token,
     required this.userEmail,
     required this.userId,
+    this.userName,
   });
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
@@ -20,16 +22,35 @@ class LoginResponse {
 
     // Pastikan data user ada
     var data = json['data'] ?? {};
-    var user = data['user'] ?? {};
+    Map<String, dynamic>? userMap;
+    if (data is Map && data['user'] is Map) {
+      userMap = Map<String, dynamic>.from(data['user']);
+    } else if (json['user'] is Map) {
+      userMap = Map<String, dynamic>.from(json['user']);
+    }
+
+    // Ambil nama dari beberapa kemungkinan kunci
+    String? name;
+    if (userMap != null) {
+      name = (userMap['nama'] ?? userMap['name'] ?? userMap['username'])
+          ?.toString();
+    }
+    // Juga cek di data langsung
+    name ??= (data['nama'] ?? data['name'] ?? data['username'])?.toString();
 
     return LoginResponse(
-      // FIX UTAMA: 200 berarti TRUE
       status: (statusCode == 200),
-
       token: (data['token'] ?? '').toString(),
-      userEmail: (user['email'] ?? '').toString(),
-      // Gunakan tryParse untuk mencegah crash jika ID bukan angka
-      userId: int.tryParse(user['id'].toString()) ?? 0,
+      userEmail: (userMap != null ? (userMap['email'] ?? '') : '').toString(),
+      userId:
+          int.tryParse(
+            (userMap != null
+                    ? (userMap['id'] ?? data['id'] ?? 0)
+                    : (data['id'] ?? 0))
+                .toString(),
+          ) ??
+          0,
+      userName: name,
     );
   }
 }

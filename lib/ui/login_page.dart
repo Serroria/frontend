@@ -66,6 +66,11 @@ class _LoginPageState extends State<LoginPage> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', response.token);
         await prefs.setInt('user_id', response.userId);
+        // Simpan username jika tersedia di respon login untuk menghindari
+        // request tambahan saat membuka homepage
+        if (response.userName != null && response.userName!.isNotEmpty) {
+          await prefs.setString('username', response.userName!);
+        }
 
         if (!mounted) return;
 
