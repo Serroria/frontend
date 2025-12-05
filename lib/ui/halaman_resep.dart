@@ -24,6 +24,7 @@ class _HalamanResepState extends State<HalamanResep> {
   @override
   void initState() {
     super.initState();
+    _futureRecipes = _fetchAndMergeRecipes();
     // Muat userId dari SharedPreferences terlebih dahulu
     _initializeUserId();
   }
@@ -223,7 +224,7 @@ class _HalamanResepState extends State<HalamanResep> {
                     crossAxisCount: 2,
                     crossAxisSpacing: 10.0,
                     mainAxisSpacing: 10.0,
-                    childAspectRatio: 0.7,
+                    childAspectRatio: 0.6,
                   ),
                   itemBuilder: (context, index) {
                     final recipe = recipes[index];

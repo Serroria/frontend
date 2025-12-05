@@ -4,7 +4,7 @@ class RecipeCard extends StatelessWidget {
   final String imageUrl;
   final String title;
   final String rating;
-  // final int steps;
+  // final int steps; // Dibiarkan sebagai comment/dihapus jika tidak digunakan
   final String kategori;
   final String difficulty;
   final String author;
@@ -27,131 +27,148 @@ class RecipeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
+    // Tetapkan ukuran cardWidth berdasarkan 45% dari lebar layar
     final cardWidth = MediaQuery.of(context).size.width * 0.45;
+
+    // Nilai radius sudut agar konsisten
+    const cardBorderRadius = 10.0;
+
     return Container(
       width: cardWidth,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 5,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          //gambar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-
-            child: Image.network(
-              imageUrl.isNotEmpty
-                  ? imageUrl
-                  : 'https://via.placeholder.com/200x200?text=No+Image', // URL placeholder jika kosong
-              height: cardWidth,
-              width: cardWidth,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                // Jika URL jaringan gagal, atau URL-nya "file:///", tampilkan ikon
-                return Container(
-                  height: cardWidth,
-                  width: cardWidth,
-                  color: Colors.grey[200],
-                  child: Center(
-                    child: Icon(
-                      Icons.fastfood,
-                      color: Colors.grey[500],
-                      size: 40,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          //isi aka padding
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                //judl
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                SizedBox(height: 5),
-
-                Row(
-                  children: [
-                    Icon(Icons.star, color: Colors.amber, size: 14),
-                    SizedBox(width: 4),
-                    Text(
-                      rating,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                    SizedBox(height: 8),
-                    Icon(Icons.timer, color: Colors.grey, size: 14),
-                    SizedBox(width: 4),
-
-                    // Text(
-                    //   '$steps langkah',
-                    //   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    // ),
-                    // Spacer(),
-                    Spacer(), // Mendorong widget berikutnya ke kanan
-                    GestureDetector(
-                      onTap: onSaveTapped, // Panggil callback saat ikon diklik
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 4.0),
-                        child: Icon(
-                          // ✅ Ubah ikon berdasarkan state isSaved
-                          isSaved ? Icons.bookmark : Icons.bookmark_border,
-                          color: isSaved ? Colors.deepOrange : Colors.grey,
-                          size: 20,
-                        ),
+      // Gunakan Card widget untuk tampilan shadow dan radius yang lebih mudah
+      child: Card(
+        // Menghilangkan elevation Card bawaan dan menggantinya dengan BoxShadow kustom
+        // atau biarkan elevation jika lebih suka shadow bawaan Card
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(cardBorderRadius),
+        ),
+        margin: EdgeInsets.zero, // Hapus margin default Card
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Gambar
+            ClipRRect(
+              // Terapkan hanya pada sudut atas gambar
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(cardBorderRadius),
+              ),
+              child: Image.network(
+                imageUrl.isNotEmpty
+                    ? imageUrl
+                    : 'https://via.placeholder.com/200x200?text=No+Image',
+                height: cardWidth * 0.9,
+                width: cardWidth,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: cardWidth,
+                    width: cardWidth,
+                    color: Colors.grey[200],
+                    child: Center(
+                      child: Icon(
+                        Icons.fastfood,
+                        color: Colors.grey[500],
+                        size: 40,
                       ),
                     ),
-                  ],
-                ),
-                SizedBox(height: 8),
-
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'kategori: $kategori',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-
-                    Text(
-                      'kesulitan: $difficulty',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-
-                Row(
-                  children: [
-                    Spacer(),
-
-                    Text(
-                      'author: $author',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                  ],
-                ),
-              ],
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+
+            // Konten Teks
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Judul
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(
+                    height: 8,
+                  ), // Sedikit ruang antar judul dan detail
+                  // Baris Rating dan Timer/Save
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment
+                        .spaceBetween, // Agar save button di kanan
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.star, color: Colors.amber, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            rating,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(
+                            width: 8,
+                          ), // Jarak antara rating dan timer
+                          const Icon(Icons.timer, color: Colors.grey, size: 14),
+                          const SizedBox(width: 4),
+                          const Text(
+                            '0m', // Ganti dengan data steps atau waktu jika ada
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+
+                      // Ikon Simpan
+                      GestureDetector(
+                        onTap: onSaveTapped,
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            right: 0.0,
+                          ), // Padding dihilangkan, cukup pakai padding Row
+                          child: Icon(
+                            isSaved ? Icons.bookmark : Icons.bookmark_border,
+                            color: isSaved ? Colors.deepOrange : Colors.grey,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Detail (Kategori, Kesulitan) - Dikonsolidasi
+                  Text(
+                    'Kategori: $kategori',
+                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                  ),
+                  Text(
+                    'Kesulitan: $difficulty',
+                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                  ),
+                  const SizedBox(height: 4),
+
+                  // Penulis
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end, // Dorong ke kanan
+                    children: [
+                      Text(
+                        'Author: $author',
+                        style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
