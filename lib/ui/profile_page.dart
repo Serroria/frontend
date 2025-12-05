@@ -411,7 +411,8 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
           child: RecipeCard(
             imageUrl: imageUrl,
             title: resep.title,
-            rating: resep.rating,
+            // rating: resep.rating,
+            cookingTime: resep.time,
             kategori: resep.kategori,
             difficulty: resep.difficulty,
             author: resep.author,

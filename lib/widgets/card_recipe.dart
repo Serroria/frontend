@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 class RecipeCard extends StatelessWidget {
   final String imageUrl;
   final String title;
-  final String rating;
+  // final String rating;
+  final String cookingTime;
   // final int steps; // Dibiarkan sebagai comment/dihapus jika tidak digunakan
   final String kategori;
   final String difficulty;
@@ -16,7 +17,8 @@ class RecipeCard extends StatelessWidget {
     super.key,
     required this.imageUrl,
     required this.title,
-    required this.rating,
+    // required this.rating,
+    required this.cookingTime,
     // required this.steps,
     required this.kategori,
     required this.difficulty,
@@ -97,32 +99,43 @@ class RecipeCard extends StatelessWidget {
                     height: 8,
                   ), // Sedikit ruang antar judul dan detail
                   // Baris Rating dan Timer/Save
+
+                  // Detail (Kategori, Kesulitan) - Dikonsolidasi
+                  Text(
+                    'Kategori: $kategori',
+                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                  ),
+                  Text(
+                    'Kesulitan: $difficulty',
+                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                  ),
+                  const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment
                         .spaceBetween, // Agar save button di kanan
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.star, color: Colors.amber, size: 14),
-                          const SizedBox(width: 4),
-                          Text(
-                            rating,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          const SizedBox(
-                            width: 8,
-                          ), // Jarak antara rating dan timer
-                          const Icon(Icons.timer, color: Colors.grey, size: 14),
-                          const SizedBox(width: 4),
-                          const Text(
-                            '0m', // Ganti dengan data steps atau waktu jika ada
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                        ],
-                      ),
+                      // Row(
+                      //   children: [
+                      //     // const Icon(Icons.star, color: Colors.amber, size: 14),
+                      //     // const SizedBox(width: 4),
+                      //     // Text(
+                      //     //   // rating,
+                      //     //   // style: TextStyle(
+                      //     //   //   fontSize: 12,
+                      //     //   //   color: Colors.grey[600],
+                      //     //   // ),
+                      //     // ),
+                      //     const SizedBox(
+                      //       width: 8,
+                      //     ), // Jarak antara rating dan timer
+                      //     // const Icon(Icons.timer, color: Colors.grey, size: 14),
+                      //     // const SizedBox(width: 4),
+                      //     // const Text(
+                      //     //   '0m', // Ganti dengan data steps atau waktu jika ada
+                      //     //   style: TextStyle(fontSize: 12, color: Colors.grey),
+                      //     // ),
+                      //   ],
+                      // ),
 
                       // Ikon Simpan
                       GestureDetector(
@@ -142,17 +155,6 @@ class RecipeCard extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 8),
-
-                  // Detail (Kategori, Kesulitan) - Dikonsolidasi
-                  Text(
-                    'Kategori: $kategori',
-                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                  ),
-                  Text(
-                    'Kesulitan: $difficulty',
-                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
-                  ),
-                  const SizedBox(height: 4),
 
                   // Penulis
                   Row(

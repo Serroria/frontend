@@ -282,7 +282,8 @@ class _HalamanResepState extends State<HalamanResep> {
                         imageUrl: recipe.image ?? '',
                         title: recipe.title,
                         kategori: recipe.kategori,
-                        rating: recipe.rating.toString(),
+                        // rating: recipe.rating.toString(),
+                        cookingTime: recipe.time,
                         difficulty: recipe.difficulty,
                         author: recipe.author,
                         // 💡 Tambahkan properti untuk menangani simpanan

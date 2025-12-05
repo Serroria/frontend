@@ -256,8 +256,9 @@ class _SearchPageState extends State<SearchPage> {
                       child: RecipeCard(
                         imageUrl: imageUrl,
                         title: resep.title,
-                        rating: resep
-                            .rating, // Atau rating dari model (misalnya '4.5')
+                        // rating: resep
+                        //     .rating, // Atau rating dari model (misalnya '4.5')
+                        cookingTime: resep.time,
                         kategori: resep.kategori,
                         difficulty: resep.difficulty,
                         author: resep.author,
