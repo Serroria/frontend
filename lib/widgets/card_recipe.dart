@@ -64,7 +64,7 @@ class RecipeCard extends StatelessWidget {
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    height: cardWidth,
+                    height: cardWidth * 0.9,
                     width: cardWidth,
                     color: Colors.grey[200],
                     child: Center(
@@ -111,8 +111,8 @@ class RecipeCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment
-                        .spaceBetween, // Agar save button di kanan
+                    mainAxisAlignment:
+                        MainAxisAlignment.start, // Agar save button di kanan
                     children: [
                       // Row(
                       //   children: [
@@ -136,7 +136,7 @@ class RecipeCard extends StatelessWidget {
                       //     // ),
                       //   ],
                       // ),
-
+                      const Spacer(),
                       // Ikon Simpan
                       GestureDetector(
                         onTap: onSaveTapped,
