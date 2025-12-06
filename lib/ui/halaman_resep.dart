@@ -51,17 +51,25 @@ class _HalamanResepState extends State<HalamanResep> {
     if (mounted) {
       try {
         // Ambil ID resep yang disimpan dari API
-        final savedIds = await apiService.fetchSavedRecipeIds(_currentUserId);
-        // Juga gabungkan dengan saved IDs lokal (fallback jika backend tidak menyimpan)
+        // final savedIds = await apiService.fetchSavedRecipes(_currentUserId);
+        // // Juga gabungkan dengan saved IDs lokal (fallback jika backend tidak menyimpan)
+        // final prefs = await SharedPreferences.getInstance();
+        // final localList = prefs.getStringList('local_saved_recipes') ?? [];
+        // final localIds = localList
+        //     .map((s) => int.tryParse(s) ?? 0)
+        //     .where((i) => i != 0)
+        //     .toSet();
+        final List<RecipeModel> savedRecipes = await apiService
+            .fetchSavedRecipes();
+        final Set<int> savedIds = savedRecipes.map((r) => r.id).toSet();
+        //  final merged = {...savedIds, ...localIds};
         final prefs = await SharedPreferences.getInstance();
         final localList = prefs.getStringList('local_saved_recipes') ?? [];
         final localIds = localList
             .map((s) => int.tryParse(s) ?? 0)
             .where((i) => i != 0)
             .toSet();
-
         final merged = {...savedIds, ...localIds};
-
         if (mounted) {
           setState(() {
             _savedRecipeIds = merged;
@@ -101,7 +109,8 @@ class _HalamanResepState extends State<HalamanResep> {
     try {
       if (isCurrentlySaved) {
         // Panggil API HAPUS
-        await apiService.removeSavedRecipe(_currentUserId, recipeId);
+        //await apiService.removeSavedRecipe(_currentUserId, recipeId);
+        await apiService.removeSavedRecipe(recipeId);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Resep "${recipe.title}" dihapus dari simpanan.'),
@@ -115,7 +124,7 @@ class _HalamanResepState extends State<HalamanResep> {
         debugPrint('DEBUG: local_saved_recipes after remove: $list');
       } else {
         // Panggil API SIMPAN
-        await apiService.saveRecipe(_currentUserId, recipeId);
+        await apiService.saveRecipe(_currentUserId);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Resep "${recipe.title}" berhasil disimpan!')),
         );

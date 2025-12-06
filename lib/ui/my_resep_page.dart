@@ -19,7 +19,7 @@ class _MyResepPageState extends State<MyResepPage> {
   List<RecipeModel> _myRecipes = [];
   bool _loading = true;
   String? _error;
-  int? _userId;
+  // int? _userId;
 
   @override
   void initState() {
@@ -35,14 +35,27 @@ class _MyResepPageState extends State<MyResepPage> {
       });
     }
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final uid = prefs.getInt('userId');
-      _userId = uid;
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token'); // Cek token secara eksplisit
 
-      List<RecipeModel> data = uid != null
-          ? await api.fetchUserRecipes(uid)
-          : await api.fetchRecipes();
+    if (token == null) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Anda harus login untuk melihat resep Anda.'; // Pesan khusus
+        _loading = false;
+      });
+      return; // Stop jika tidak ada token
+    }
+    try {
+      List<RecipeModel> data = await api.fetchMyRecipes();
+
+      // final prefs = await SharedPreferences.getInstance();
+      // final uid = prefs.getInt('userId');
+      // _userId = uid;
+
+      // List<RecipeModel> data = uid != null
+      //     ? await api.fetchUserRecipes(uid)
+      //     : await api.fetchRecipes();
 
       if (!mounted) return;
       setState(() {

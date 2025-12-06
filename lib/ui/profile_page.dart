@@ -59,7 +59,8 @@ class _ProfilePageState extends State<ProfilePage> {
     if (fetchedUserId != 0) {
       try {
         final api = ApiService();
-        final list = await api.fetchUserRecipes(fetchedUserId);
+        final list = await api.fetchMyRecipes();
+        // final list = await api.fetchUserRecipes(fetchedUserId);
         if (mounted) {
           setState(() {
             _recipeCount = list.length;
@@ -257,10 +258,11 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
   }
 
   Future<void> _fetchRecipes() async {
-    if (widget.userId == null) {
+    if (widget.userId == null || widget.userId == 0) {
       if (mounted) {
         setState(() {
-          _error = "User ID tidak ditemukan";
+          _recipes = [];
+          _error = "Silakan login untuk melihat data ini.";
           _isLoading = false;
         });
       }
@@ -271,75 +273,81 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
       List<RecipeModel> fetchedData = [];
 
       if (widget.isSavedRecipes) {
-        print('DEBUG: Fetching saved recipes for user ${widget.userId}');
-        var savedIds = await api.fetchSavedRecipeIds(widget.userId!);
-        print('DEBUG: Saved recipe IDs (server): $savedIds');
-
+        // print('DEBUG: Fetching saved recipes for user ${widget.userId}');
+        // var savedIds = await api.fetchSavedRecipeIds(widget.userId!);
+        /// print('DEBUG: Saved recipe IDs (server): $savedIds');
+        print('DEBUG: Fetching saved recipes (secure endpoint)');
+        fetchedData = await api.fetchSavedRecipes();
         // Selalu gabungkan dengan saved IDs lokal sebagai fallback dan "source of truth" sementara
         // Hal ini memastikan aksi simpan yang dilakukan secara lokal langsung terlihat di tab Profil
-        final prefs = await SharedPreferences.getInstance();
-        final localList = prefs.getStringList('local_saved_recipes') ?? [];
-        final localIds = localList
-            .map((s) => int.tryParse(s) ?? 0)
-            .where((i) => i != 0)
-            .toSet();
-        if (localIds.isNotEmpty) {
-          print('DEBUG: Saved recipe IDs (local): $localIds');
-        }
-
-        // Gabungkan server + lokal (lokal menang jika ada duplikasi)
-        savedIds = {...savedIds, ...localIds};
-        print('DEBUG: Saved recipe IDs (merged): $savedIds');
-
-        // ambil detail resep berdasarkan ID
-        // Jika fetch detail gagal, tambahkan placeholder agar item tetap terlihat di UI
-        for (var id in savedIds) {
-          try {
-            final resep = await api.fetchUserRecipeById(id);
-            if (resep != null) {
-              fetchedData.add(resep);
-            } else {
-              // buat placeholder minimal sehingga resep yang disimpan tetap tampil
-              fetchedData.add(
-                RecipeModel(
-                  id: id,
-                  title: 'Resep (ID: $id)',
-                  kategori: '-',
-                  rating: '0',
-                  ingredients: '',
-                  steps: '',
-                  description: '',
-                  image: null,
-                  time: '',
-                  difficulty: '',
-                  author: '-',
-                ),
-              );
-            }
-          } catch (e) {
-            print('DEBUG: Gagal fetch detail resep $id: $e');
-            // tambahkan placeholder jika terjadi error
-            fetchedData.add(
-              RecipeModel(
-                id: id,
-                title: 'Resep (ID: $id)',
-                kategori: '-',
-                rating: '0',
-                ingredients: '',
-                steps: '',
-                description: '',
-                image: null,
-                time: '',
-                difficulty: '',
-                author: '-',
-              ),
-            );
-          }
-        }
+        // final prefs = await SharedPreferences.getInstance();
+        // final localList = prefs.getStringList('local_saved_recipes') ?? [];
+        // final localIds = localList
+        //     .map((s) => int.tryParse(s) ?? 0)
+        //     .where((i) => i != 0)
+        //     .toSet();
+        // if (localIds.isNotEmpty) {
+        //   print('DEBUG: Saved recipe IDs (local): $localIds');
       } else {
-        // Ambil resep user langsung
-        fetchedData = await api.fetchUserRecipes(widget.userId!);
+        // ✅ LOGIKA AMAN UNTUK RESEP SAYA
+        print('DEBUG: Fetching my own recipes (secure endpoint)');
+        fetchedData = await api.fetchMyRecipes();
       }
+
+      // Gabungkan server + lokal (lokal menang jika ada duplikasi)
+      // savedIds = {...savedIds, ...localIds};
+      // print('DEBUG: Saved recipe IDs (merged): $savedIds');
+
+      // ambil detail resep berdasarkan ID
+      // Jika fetch detail gagal, tambahkan placeholder agar item tetap terlihat di UI
+      //   for (var id in savedIds) {
+      //     try {
+      //       final resep = await api.fetchSavedRecipes(id);
+      //       if (resep != null) {
+      //         fetchedData.add(resep);
+      //       } else {
+      //         // buat placeholder minimal sehingga resep yang disimpan tetap tampil
+      //         fetchedData.add(
+      //           RecipeModel(
+      //             id: id,
+      //             title: 'Resep (ID: $id)',
+      //             kategori: '-',
+      //             rating: '0',
+      //             ingredients: '',
+      //             steps: '',
+      //             description: '',
+      //             image: null,
+      //             time: '',
+      //             difficulty: '',
+      //             author: '-',
+      //           ),
+      //         );
+      //       }
+      //     } catch (e) {
+      //       print('DEBUG: Gagal fetch detail resep $id: $e');
+      //       // tambahkan placeholder jika terjadi error
+      //       fetchedData.add(
+      //         RecipeModel(
+      //           id: id,
+      //           title: 'Resep (ID: $id)',
+      //           kategori: '-',
+      //           rating: '0',
+      //           ingredients: '',
+      //           steps: '',
+      //           description: '',
+      //           image: null,
+      //           time: '',
+      //           difficulty: '',
+      //           author: '-',
+      //         ),
+      //       );
+      //     }
+      //   }
+      // } else {
+      //   // Ambil resep user langsung
+      //   fetchedData = await api.fetchMyRecipes();
+      //   // fetchedData = await api.fetchUserRecipes(widget.userId!);
+      // }
 
       if (mounted) {
         setState(() {
