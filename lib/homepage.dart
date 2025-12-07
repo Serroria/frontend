@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:uasmoba/services/api_service.dart';
 import 'package:uasmoba/services/the_meal_db_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uasmoba/models/recipe_model.dart'; // Tambahkan import model RecipeModel
-// Asumsikan file login_page.dart berada di direktori yang sama
+import 'package:uasmoba/models/recipe_model.dart';
 import 'ui/login_page.dart';
-import 'ui/detail_resep.dart'; // Import DetailResep widget
-// ✅ TAMBAHKAN IMPORT INI
+import 'ui/detail_resep.dart';
 import 'ui/search_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -21,15 +19,14 @@ class _HomePageState extends State<HomePage> {
   final TheMealDbService dbApi = TheMealDbService();
   final TextEditingController _searchController = TextEditingController();
 
-  List<RecipeModel> _recommendations = []; //dari TheMealDb
-  List<RecipeModel> _localNewRecipes = []; //dari lokal CI4
+  List<RecipeModel> _recommendations = [];
+  List<RecipeModel> _localNewRecipes = [];
   bool _isLoading = true;
   String? _error;
-  String _username = "User"; // Akan diisi dari SharedPreferences
+  String _username = "User";
 
   String _selectedCategory = 'Dessert';
 
-  //mapping kategori lokal ke kategori THemealdb
   final Map<String, String> _categoryMap = {
     'Nusantara': 'Chicken',
     'Asia': 'Seafood',
@@ -64,10 +61,99 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Fungsi untuk menangani logout dan navigasi ke halaman login
+  // ✅ TAMBAHKAN FUNGSI DEBUG INI
+  Future<void> _showDebugInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    final userId = prefs.getInt('userId');
+    final username = prefs.getString('username');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🛠️ Debug Info'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _debugItem('Token ditemukan', token != null ? '✅' : '❌'),
+              _debugItem('Panjang Token', '${token?.length ?? 0} karakter'),
+              _debugItem('User ID', userId?.toString() ?? 'null'),
+              _debugItem('Username', username ?? 'null'),
+              const SizedBox(height: 10),
+              if (token != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Token Preview:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SelectableText(
+                      token!.substring(
+                        0,
+                        token.length > 30 ? 30 : token.length,
+                      ),
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await prefs.remove('token');
+              await prefs.remove('userId');
+              await prefs.remove('username');
+              if (!mounted) return;
+              Navigator.pop(context);
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Token dihapus!')));
+              if (mounted) {
+                setState(() {
+                  _username = 'User';
+                });
+              }
+            },
+            child: const Text(
+              'Hapus Token',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _debugItem(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Text(value),
+        ],
+      ),
+    );
+  }
+
   void _handleLogout() {
-    // Navigasi ke LoginPage dan menghapus semua rute sebelumnya
-    // Ini memastikan user tidak bisa kembali ke HomePage setelah logout
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const LoginPage()),
       (Route<dynamic> route) => false,
@@ -98,7 +184,6 @@ class _HomePageState extends State<HomePage> {
     List<RecipeModel> localFiltered = [];
     String? tempError;
 
-    // 1. Ambil data rekomendasi (Eksternal)
     try {
       recommendations = await dbApi.fetchFilteredRecipes('c', mealDbCategory);
     } catch (e) {
@@ -106,10 +191,7 @@ class _HomePageState extends State<HomePage> {
       debugPrint(tempError);
     }
 
-    // 2. Ambil data resep lokal terbaru (CI4)
     try {
-      // Gunakan fetchRecipes() yang fetch semua resep lokal
-      // atau fallback ke kategori filter jika ada
       localFiltered = await api.fetchRecipes();
     } catch (e) {
       tempError = (tempError ?? '') + '\nGagal memuat resep lokal: $e';
@@ -119,10 +201,8 @@ class _HomePageState extends State<HomePage> {
     if (mounted) {
       setState(() {
         _recommendations = recommendations;
-        // Perbarui _localNewRecipes dengan hasil filter
         _localNewRecipes = localFiltered;
         _isLoading = false;
-        // Tetapkan error HANYA JIKA TIDAK ADA DATA SAMA SEKALI
         if (recommendations.isEmpty && localFiltered.isEmpty) {
           _error = tempError ?? 'Gagal memuat data resep.';
         }
@@ -159,16 +239,20 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
-        // **START: PERUBAHAN UNTUK TOMBOL LOGOUT**
+        // ✅ MODIFIKASI ACTIONS: TAMBAHKAN TOMBOL DEBUG SEBELUM LOGOUT
         actions: [
           IconButton(
+            icon: const Icon(Icons.bug_report, color: Colors.blue),
+            onPressed: _showDebugInfo, // ← FUNGSI DEBUG BARU
+            tooltip: "Debug Token",
+          ),
+          IconButton(
             icon: const Icon(Icons.logout, color: Colors.deepOrange),
-            onPressed: _handleLogout, // Panggil fungsi logout
+            onPressed: _handleLogout,
             tooltip: "Logout",
           ),
           const SizedBox(width: 8),
         ],
-        // **END: PERUBAHAN UNTUK TOMBOL LOGOUT**
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -200,11 +284,9 @@ class _HomePageState extends State<HomePage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      // Navigasi ke SearchPage dan kirimkan kata kunci
                       builder: (context) => SearchPage(initialQuery: query),
                     ),
                   );
-                  // Opsional: kosongkan field setelah pencarian
                   _searchController.clear();
                 }
               },
@@ -233,16 +315,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 24),
 
-            // 📌 Card Resep 1
-            // const Text(
-            //   "Cari Resep Terbaru",
-            //   style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            // ),
-            // const SizedBox(height: 12),
-            // _recipeCard("Ayam Bakar Padang", 101),
-            // const SizedBox(height: 20),
-
-            //dianmis card utama
+            // Konten utama
             if (_isLoading)
               const Center(child: CircularProgressIndicator())
             else if (_error != null)
@@ -251,7 +324,7 @@ class _HomePageState extends State<HomePage> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- 1. Resep Terbaru (dari API Lokal CI4) ---
+                  // Resep Lokal
                   const Text(
                     "Cari Resep Terbaru (Lokal)",
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
@@ -260,12 +333,11 @@ class _HomePageState extends State<HomePage> {
 
                   if (_localNewRecipes.isEmpty)
                     const Text('Belum ada resep lokal terbaru.'),
-                  // Loop data terbaru
                   ..._localNewRecipes.map((r) => _buildRecipeCard(r)).toList(),
 
                   const SizedBox(height: 20),
 
-                  // --- 2. Resep Populer/Rekomendasi (dari TheMealDB) ---
+                  // Resep TheMealDB
                   Text(
                     "Rekomendasi Resep Populer: $_selectedCategory",
                     style: const TextStyle(
@@ -277,39 +349,14 @@ class _HomePageState extends State<HomePage> {
 
                   if (_recommendations.isEmpty)
                     const Text('Gagal memuat resep rekomendasi.'),
-                  // Loop data rekomendasi
                   ..._recommendations.map((r) => _buildRecipeCard(r)).toList(),
 
                   const SizedBox(height: 20),
                 ],
               ),
-
-            //   // 📌 Card Resep 2
-            //   const Text(
-            //     "Resep Populer",
-            //     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            //   ),
-            //   const SizedBox(height: 12),
-            //   _recipeCard("Mie Goreng Jawa", 250),
-            //   _recipeCard("Rendang Daging", 244),
-            //   _recipeCard("Klepon Gula Merah", 108),
-
-            //   const SizedBox(height: 20),
-
-            //   // 📌 Card Resep 3
-            //   const Text(
-            //     "Rekomendasi Untuk Kamu",
-            //     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            //   ),
-            //   const SizedBox(height: 12),
-            //   _recipeCard("Nasi Uduk Betawi", 209),
-            //   _recipeCard("Kimchi Jjigae", 210),
-            // ],
           ],
         ),
       ),
-
-      // ⬇ Navbar Bawah
     );
   }
 
@@ -319,7 +366,6 @@ class _HomePageState extends State<HomePage> {
       padding: const EdgeInsets.only(right: 16),
       child: GestureDetector(
         onTap: () => _onCategoryTap(title),
-
         child: Column(
           children: [
             CircleAvatar(
@@ -333,7 +379,6 @@ class _HomePageState extends State<HomePage> {
                 color: isActive ? Colors.white : Colors.deepOrange,
               ),
             ),
-
             const SizedBox(height: 6),
             Text(
               title,
@@ -349,19 +394,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildRecipeCard(RecipeModel resep) {
-    // Cek apakah ini data lokal atau TheMealDB
     final isLocal = resep.author != 'TheMealDB';
 
     String imageUrl = resep.image ?? 'https://picsum.photos/200';
 
-    // Jika lokal dan hanya nama file, bangun URL lengkap
     if (isLocal && !imageUrl.startsWith('http')) {
-      // Pastikan resep.image TIDAK kosong
       if (resep.image != null && resep.image!.isNotEmpty) {
-        // Periksa dan perbaiki jika image hanya nama file
         imageUrl = '${api.baseUrl}/uploads/recipes/${resep.image}';
       } else {
-        // Atur URL ke placeholder jika gambar lokal kosong
         imageUrl = 'https://via.placeholder.com/200?text=No+Image';
       }
     }
@@ -372,8 +412,6 @@ class _HomePageState extends State<HomePage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: () async {
-          // Jika resep dari TheMealDB (hanya punya ID dan nama),
-          // kita harus Lakukan Lookup Detail lagi sebelum navigasi.
           if (!isLocal) {
             final detail = await dbApi.lookupMealDetail(resep.id.toString());
             if (detail != null) {
@@ -389,7 +427,6 @@ class _HomePageState extends State<HomePage> {
               );
             }
           } else {
-            // Jika resep lokal CI4 (sudah lengkap), langsung navigasi
             Navigator.push(
               context,
               MaterialPageRoute(

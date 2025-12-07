@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
@@ -20,7 +21,7 @@ class TokenExpiredException implements Exception {
 class ApiService {
   // ✅ Base URL conditional untuk Web/Emulator
   static const String _baseUrl = (kIsWeb)
-      ? "http://localhost:8080"
+      ? "http://127.0.0.1:8080"
       : "http://10.0.2.2:8080";
   // final String _baseUrl = "http://10.0.2.2:8080";
   String get baseUrl => _baseUrl;
@@ -29,6 +30,12 @@ class ApiService {
   Future<Map<String, String>> _getAuthHeaders() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
+    final userId = prefs.getInt('userId');
+
+    print('=== DEBUG TOKEN CHECK ===');
+    print('Token: ${token?.substring(0, min(20, token?.length ?? 0))}...');
+    print('User ID: $userId');
+    print('=== END DEBUG ===');
 
     if (token == null) {
       print('DEBUG: SharedPreferences - TOKEN TIDAK DITEMUKAN!');
@@ -111,7 +118,18 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return LoginResponse.fromJson(json.decode(response.body));
+        final loginResponse = LoginResponse.fromJson(
+          json.decode(response.body),
+        );
+
+        // ✅ OTOMATIS SIMPAN JIKA LOGIN BERHASIL
+        if (loginResponse.status) {
+          await saveToken(loginResponse.token);
+          await saveUserData(loginResponse.userId, loginResponse.userName);
+          print('DEBUG: Login berhasil, token & user data disimpan');
+        }
+
+        return loginResponse;
       } else {
         var errorData = json.decode(response.body);
         return LoginResponse(
@@ -131,6 +149,29 @@ class ApiService {
         userName: '',
       );
     }
+  }
+
+  //dimpan token
+  // Tambahkan fungsi ini di ApiService
+  Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('token', token);
+    print('DEBUG: Token berhasil disimpan, panjang: ${token.length}');
+  }
+
+  Future<void> saveUserData(int userId, String username) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('userId', userId);
+    await prefs.setString('username', username);
+    print('DEBUG: User data saved - ID: $userId, Username: $username');
+  }
+
+  Future<void> clearToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('token');
+    await prefs.remove('userId');
+    await prefs.remove('username');
+    print('DEBUG: Semua data user dihapus');
   }
 
   // CREATE RECIPE

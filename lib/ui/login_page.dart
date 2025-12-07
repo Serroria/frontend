@@ -13,6 +13,8 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
   final _apiService = ApiService();
 
   @override
@@ -63,12 +65,12 @@ class _LoginPageState extends State<LoginPage> {
 
       // ... di dalam _doLogin()
       if (response.status) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', response.token);
-        // Store userId using camelCase key so other pages can read it
-        await prefs.setInt('userId', response.userId);
-        // Save username dari database
-        await prefs.setString('username', response.userName);
+        // final prefs = await SharedPreferences.getInstance();
+        // await prefs.setString('token', response.token);
+        // // Store userId using camelCase key so other pages can read it
+        // await prefs.setInt('userId', response.userId);
+        // // Save username dari database
+        // await prefs.setString('username', response.userName);
 
         if (!mounted) return;
 
@@ -81,6 +83,15 @@ class _LoginPageState extends State<LoginPage> {
         //   ),
         // );
         Navigator.pushReplacementNamed(context, "/");
+        // Optional: Tampilkan pesan sukses
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Login berhasil! Selamat datang ${response.userName}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
       } else {
         // Tambahkan SnackBar jika login gagal
         ScaffoldMessenger.of(context).showSnackBar(
