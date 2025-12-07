@@ -598,74 +598,113 @@ class ApiService {
   Future<void> saveRecipe(int recipeId) async {
     // Coba beberapa kandidat endpoint karena backend bisa bervariasi
     final uri = Uri.parse('$_baseUrl/api/resep/bookmark');
-    final bodyData = json.encode({'recipe_id': recipeId});
-    // final candidates = [
-    //   Uri.parse('$_baseUrl/resep/simpan'),
-    //   Uri.parse('$_baseUrl/resep/save'),
-    //   Uri.parse('$_baseUrl/resep/$recipeId/simpan'),
-    //   Uri.parse('$_baseUrl/resep/saved'),
-    // ];
+    final headers = await _getAuthHeaders();
+    headers['Content-Type'] = 'application/json';
+    print('DEBUG: Saving recipe ID: $recipeId');
+    print('DEBUG: URL: $uri');
+    print('DEBUG: Headers: $headers');
 
-    // final uri = Uri.parse('$_baseUrl/api/resep/bookmark');
-
-    //Exception? lastException;
+    final body = json.encode({'recipe_id': recipeId});
+    print('DEBUG: Request Body: $body');
+    print('===== DEBUG SAVE RECIPE END =====');
 
     try {
-      print('DEBUG: Trying saveRecipe -> $uri');
       final response = await http
           .post(
             uri,
-            headers: await _getAuthHeaders(),
-            // body: json.encode({'user_id': userId, 'recipe_id': recipeId}),
-            body: bodyData,
+            headers: headers,
+            body: json.encode({'recipe_id': recipeId}),
           )
           .timeout(const Duration(seconds: 10));
-
-      print('DEBUG: saveRecipe $uri -> ${response.statusCode}');
-      print('DEBUG: saveRecipe body: ${response.body}');
-
-      if (response.statusCode == 201 ||
-          response.statusCode == 200 ||
-          response.statusCode == 204) {
+      print('DEBUG: saveRecipe Response -> ${response.statusCode}');
+      print('DEBUG: saveRecipe Body: ${response.body}');
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        print('DEBUG: Recipe saved successfully: $responseData');
         return;
       } else if (response.statusCode == 401) {
         throw TokenExpiredException();
-        // } else if (response.statusCode == 404) {
-        //   // coba endpoint berikutnya
-        //   lastException = Exception('404 Not Found for $uri');
-        //   continue;
+      } else if (response.statusCode == 404) {
+        throw Exception('Resep tidak ditemukan di server');
       } else {
-        throw Exception('Gagal menyimpan resep: ${response.body}');
-        // Log error, tapi jangan langsung throw agar UI masih bisa menyimpan lokal sebagai fallback
-        // try {
-        //   final errorBody = jsonDecode(response.body);
-        //   print(
-        //     'DEBUG: saveRecipe error: ${errorBody['message'] ?? response.body}',
-        //   );
-        // } catch (_) {
-        //   print('DEBUG: saveRecipe unexpected response: ${response.body}');
-        // }
-        // // Return tanpa throw sehingga caller dapat melakukan fallback lokal
-        //return;
+        final errorBody = json.decode(response.body);
+        throw Exception(
+          'Gagal menyimpan resep: ${errorBody['message'] ?? response.body}',
+        );
       }
-      // } on TimeoutException catch (e) {
-      //   lastException = Exception('Timeout saving to $uri: $e');
-      //   continue;
-      // } on SocketException catch (e) {
-      //   lastException = Exception('Network error saving to $uri: $e');
-      //   continue;
     } catch (e) {
+      print('DEBUG: Error in saveRecipe: $e');
       rethrow;
-      // lastException = Exception('Error saving to $uri: $e');
-      // continue;
     }
-
-    // Jika semua candidate gagal, log dan kembalikan tanpa exception agar client bisa fallback lokal
-    //   print(
-    //     'DEBUG: saveRecipe - semua endpoint gagal, lastException: $lastException',
-    //   );
-    //   return;
   }
+  // final bodyData = json.encode({'recipe_id': recipeId});
+  // final candidates = [
+  //   Uri.parse('$_baseUrl/resep/simpan'),
+  //   Uri.parse('$_baseUrl/resep/save'),
+  //   Uri.parse('$_baseUrl/resep/$recipeId/simpan'),
+  //   Uri.parse('$_baseUrl/resep/saved'),
+  // ];
+
+  // final uri = Uri.parse('$_baseUrl/api/resep/bookmark');
+
+  //Exception? lastException;
+
+  //   try {
+  //     print('DEBUG: Trying saveRecipe -> $uri');
+  //     final response = await http
+  //         .post(
+  //           uri,
+  //           headers: await _getAuthHeaders(),
+  //           // body: json.encode({'user_id': userId, 'recipe_id': recipeId}),
+  //           body: bodyData,
+  //         )
+  //         .timeout(const Duration(seconds: 10));
+
+  //     print('DEBUG: saveRecipe $uri -> ${response.statusCode}');
+  //     print('DEBUG: saveRecipe body: ${response.body}');
+
+  //     if (response.statusCode == 201 ||
+  //         response.statusCode == 200 ||
+  //         response.statusCode == 204) {
+  //       return;
+  //     } else if (response.statusCode == 401) {
+  //       throw TokenExpiredException();
+  //       // } else if (response.statusCode == 404) {
+  //       //   // coba endpoint berikutnya
+  //       //   lastException = Exception('404 Not Found for $uri');
+  //       //   continue;
+  //     } else {
+  //       throw Exception('Gagal menyimpan resep: ${response.body}');
+  //       // Log error, tapi jangan langsung throw agar UI masih bisa menyimpan lokal sebagai fallback
+  //       // try {
+  //       //   final errorBody = jsonDecode(response.body);
+  //       //   print(
+  //       //     'DEBUG: saveRecipe error: ${errorBody['message'] ?? response.body}',
+  //       //   );
+  //       // } catch (_) {
+  //       //   print('DEBUG: saveRecipe unexpected response: ${response.body}');
+  //       // }
+  //       // // Return tanpa throw sehingga caller dapat melakukan fallback lokal
+  //       //return;
+  //     }
+  //     // } on TimeoutException catch (e) {
+  //     //   lastException = Exception('Timeout saving to $uri: $e');
+  //     //   continue;
+  //     // } on SocketException catch (e) {
+  //     //   lastException = Exception('Network error saving to $uri: $e');
+  //     //   continue;
+  //   } catch (e) {
+  //     rethrow;
+  //     // lastException = Exception('Error saving to $uri: $e');
+  //     // continue;
+  //   }
+
+  //   // Jika semua candidate gagal, log dan kembalikan tanpa exception agar client bisa fallback lokal
+  //   //   print(
+  //   //     'DEBUG: saveRecipe - semua endpoint gagal, lastException: $lastException',
+  //   //   );
+  //   //   return;
+  // }
 
   /// Menghapus resep dari daftar favorit user (DELETE /resep/simpan/hapus)
   Future<void> removeSavedRecipe(int recipeId) async {
@@ -677,59 +716,89 @@ class ApiService {
     //   Uri.parse('$_baseUrl/resep/saved/remove'),
     // ];
     final uri = Uri.parse('$_baseUrl/api/resep/bookmark');
+    final headers = await _getAuthHeaders();
+    headers['Content-Type'] = 'application/json';
 
+    print('DEBUG: Removing saved recipe ID: $recipeId');
     // Exception? lastException;
-
     try {
-      print('DEBUG: Trying removeSavedRecipe -> $uri');
-      final headers = await _getAuthHeaders();
-      headers['Content-Type'] = 'application/json';
-
-      // Beberapa server tidak mendukung body pada DELETE; jika gagal gunakan POST fallback
       final response = await http
           .delete(
             uri,
-            headers: await _getAuthHeaders(),
-            body: json.encode({'recipe_id': recipeId, '_method': 'DELETE'}),
+            headers: headers,
+            body: json.encode({'recipe_id': recipeId}),
           )
           .timeout(const Duration(seconds: 10));
 
-      print('DEBUG: removeSavedRecipe $uri -> ${response.statusCode}');
-      print('DEBUG: removeSavedRecipe body: ${response.body}');
+      print('DEBUG: removeSavedRecipe Response -> ${response.statusCode}');
+      print('DEBUG: removeSavedRecipe Body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 204) {
+        print('DEBUG: Recipe removed from saved successfully');
         return;
       } else if (response.statusCode == 401) {
         throw TokenExpiredException();
-        // } else if (response.statusCode == 404) {
-        //   lastException = Exception('404 Not Found for $uri');
-        //   continue;
       } else {
-        throw Exception('Gagal menghapus simpanan: ${response.body}');
-        // Jika ada error lain, coba fallback POST remove
-        // try {
-        //   final postResp = await http
-        //       .post(
-        //         uri,
-        //         headers: await _getAuthHeaders(),
-        //         body: json.encode({'user_id': userId, 'recipe_id': recipeId}),
-        //       )
-        //       .timeout(const Duration(seconds: 10));
-
-        //   print(
-        //     'DEBUG: removeSavedRecipe POST fallback $uri -> ${postResp.statusCode}',
-        //   );
-        //   print('DEBUG: removeSavedRecipe POST body: ${postResp.body}');
-
-        //   if (postResp.statusCode == 200 ||
-        //       postResp.statusCode == 204 ||
-        //       postResp.statusCode == 201) {
-        //     return;
+        final errorBody = json.decode(response.body);
+        throw Exception(
+          'Gagal menghapus simpanan: ${errorBody['message'] ?? response.body}',
+        );
       }
     } catch (e) {
-      print('DEBUG: removeSavedRecipe POST fallback failed: $e');
+      print('DEBUG: Error in removeSavedRecipe: $e');
       rethrow;
     }
+
+    // try {
+    //   print('DEBUG: Trying removeSavedRecipe -> $uri');
+    //   final headers = await _getAuthHeaders();
+    //   headers['Content-Type'] = 'application/json';
+
+    //   // Beberapa server tidak mendukung body pada DELETE; jika gagal gunakan POST fallback
+    //   final response = await http
+    //       .delete(
+    //         uri,
+    //         headers: await _getAuthHeaders(),
+    //         body: json.encode({'recipe_id': recipeId, '_method': 'DELETE'}),
+    //       )
+    //       .timeout(const Duration(seconds: 10));
+
+    //   print('DEBUG: removeSavedRecipe $uri -> ${response.statusCode}');
+    //   print('DEBUG: removeSavedRecipe body: ${response.body}');
+
+    //   if (response.statusCode == 200 || response.statusCode == 204) {
+    //     return;
+    //   } else if (response.statusCode == 401) {
+    //     throw TokenExpiredException();
+    //     // } else if (response.statusCode == 404) {
+    //     //   lastException = Exception('404 Not Found for $uri');
+    //     //   continue;
+    //   } else {
+    //     throw Exception('Gagal menghapus simpanan: ${response.body}');
+    //     // Jika ada error lain, coba fallback POST remove
+    //     // try {
+    //     //   final postResp = await http
+    //     //       .post(
+    //     //         uri,
+    //     //         headers: await _getAuthHeaders(),
+    //     //         body: json.encode({'user_id': userId, 'recipe_id': recipeId}),
+    //     //       )
+    //     //       .timeout(const Duration(seconds: 10));
+
+    //     //   print(
+    //     //     'DEBUG: removeSavedRecipe POST fallback $uri -> ${postResp.statusCode}',
+    //     //   );
+    //     //   print('DEBUG: removeSavedRecipe POST body: ${postResp.body}');
+
+    //     //   if (postResp.statusCode == 200 ||
+    //     //       postResp.statusCode == 204 ||
+    //     //       postResp.statusCode == 201) {
+    //     //     return;
+    //   }
+    // } catch (e) {
+    //   print('DEBUG: removeSavedRecipe POST fallback failed: $e');
+    //   rethrow;
+    // }
   }
   //         // Jangan lempar exception agar caller dapat melakukan fallback lokal
   //         return;

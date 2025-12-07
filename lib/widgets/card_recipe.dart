@@ -9,6 +9,7 @@ class RecipeCard extends StatelessWidget {
   final String kategori;
   final String difficulty;
   final String author;
+  final int? recipeId;
 
   final VoidCallback? onSaveTapped;
   final bool isSaved;
@@ -23,6 +24,7 @@ class RecipeCard extends StatelessWidget {
     required this.kategori,
     required this.difficulty,
     required this.author,
+    this.recipeId,
     this.onSaveTapped,
     this.isSaved = false,
   });

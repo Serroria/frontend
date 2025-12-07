@@ -242,118 +242,30 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
   @override
   void initState() {
     super.initState();
-    // Panggil fetch hanya jika userId sudah tersedia
-    if (widget.userId != null) {
-      _fetchRecipes();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _ProfileRecipeTab oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Panggil fetch jika ID user baru tersedia (misal saat login selesai)
-    if (widget.userId != oldWidget.userId && widget.userId != null) {
-      _fetchRecipes();
-    }
+    _fetchRecipes();
   }
 
   Future<void> _fetchRecipes() async {
-    if (widget.userId == null || widget.userId == 0) {
-      if (mounted) {
-        setState(() {
-          _recipes = [];
-          _error = "Silakan login untuk melihat data ini.";
-          _isLoading = false;
-        });
-      }
-      return;
-    }
-
     try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
       List<RecipeModel> fetchedData = [];
 
       if (widget.isSavedRecipes) {
-        // print('DEBUG: Fetching saved recipes for user ${widget.userId}');
-        // var savedIds = await api.fetchSavedRecipeIds(widget.userId!);
-        /// print('DEBUG: Saved recipe IDs (server): $savedIds');
-        print('DEBUG: Fetching saved recipes (secure endpoint)');
+        print('DEBUG: Fetching saved recipes');
         fetchedData = await api.fetchSavedRecipes();
-        // Selalu gabungkan dengan saved IDs lokal sebagai fallback dan "source of truth" sementara
-        // Hal ini memastikan aksi simpan yang dilakukan secara lokal langsung terlihat di tab Profil
-        // final prefs = await SharedPreferences.getInstance();
-        // final localList = prefs.getStringList('local_saved_recipes') ?? [];
-        // final localIds = localList
-        //     .map((s) => int.tryParse(s) ?? 0)
-        //     .where((i) => i != 0)
-        //     .toSet();
-        // if (localIds.isNotEmpty) {
-        //   print('DEBUG: Saved recipe IDs (local): $localIds');
       } else {
-        // ✅ LOGIKA AMAN UNTUK RESEP SAYA
-        print('DEBUG: Fetching my own recipes (secure endpoint)');
+        print('DEBUG: Fetching my recipes');
         fetchedData = await api.fetchMyRecipes();
       }
-
-      // Gabungkan server + lokal (lokal menang jika ada duplikasi)
-      // savedIds = {...savedIds, ...localIds};
-      // print('DEBUG: Saved recipe IDs (merged): $savedIds');
-
-      // ambil detail resep berdasarkan ID
-      // Jika fetch detail gagal, tambahkan placeholder agar item tetap terlihat di UI
-      //   for (var id in savedIds) {
-      //     try {
-      //       final resep = await api.fetchSavedRecipes(id);
-      //       if (resep != null) {
-      //         fetchedData.add(resep);
-      //       } else {
-      //         // buat placeholder minimal sehingga resep yang disimpan tetap tampil
-      //         fetchedData.add(
-      //           RecipeModel(
-      //             id: id,
-      //             title: 'Resep (ID: $id)',
-      //             kategori: '-',
-      //             rating: '0',
-      //             ingredients: '',
-      //             steps: '',
-      //             description: '',
-      //             image: null,
-      //             time: '',
-      //             difficulty: '',
-      //             author: '-',
-      //           ),
-      //         );
-      //       }
-      //     } catch (e) {
-      //       print('DEBUG: Gagal fetch detail resep $id: $e');
-      //       // tambahkan placeholder jika terjadi error
-      //       fetchedData.add(
-      //         RecipeModel(
-      //           id: id,
-      //           title: 'Resep (ID: $id)',
-      //           kategori: '-',
-      //           rating: '0',
-      //           ingredients: '',
-      //           steps: '',
-      //           description: '',
-      //           image: null,
-      //           time: '',
-      //           difficulty: '',
-      //           author: '-',
-      //         ),
-      //       );
-      //     }
-      //   }
-      // } else {
-      //   // Ambil resep user langsung
-      //   fetchedData = await api.fetchMyRecipes();
-      //   // fetchedData = await api.fetchUserRecipes(widget.userId!);
-      // }
 
       if (mounted) {
         setState(() {
           _recipes = fetchedData;
           _isLoading = false;
-          _error = null;
         });
       }
     } catch (e) {
@@ -363,27 +275,49 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
           _isLoading = false;
         });
       }
+      print('DEBUG: Error fetching recipes: $e');
     }
+  }
+
+  // Refresh ketika kembali ke tab
+  Future<void> _refresh() async {
+    await _fetchRecipes();
   }
 
   @override
   Widget build(BuildContext context) {
+    return RefreshIndicator(onRefresh: _refresh, child: _buildContent());
+  }
+
+  Widget _buildContent() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
+
     if (_error != null) {
-      return Center(child: Text('Error: $_error'));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('Error: $_error'),
+            const SizedBox(height: 10),
+            ElevatedButton(
+              onPressed: _fetchRecipes,
+              child: const Text('Coba Lagi'),
+            ),
+          ],
+        ),
+      );
     }
+
     if (_recipes.isEmpty) {
       return Center(child: Text(widget.emptyText));
     }
 
-    // Tampilan Grid untuk Resep
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        // ✅ SESUAIKAN ASPECT RATIO AGAR CARD MUAT VERTIKAL
         childAspectRatio: 0.7,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
@@ -392,41 +326,261 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
       itemBuilder: (context, index) {
         final resep = _recipes[index];
 
-        // 1. Build URL Gambar
-        String imageUrl = resep.image ?? '';
-        if (imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
-          // Ganti /uploads/receipes/ menjadi /uploads/recipes/ (perhatikan typo)
-          imageUrl = '${api.baseUrl}/uploads/recipes/$imageUrl';
-        } else if (imageUrl.isEmpty) {
-          imageUrl = 'https://via.placeholder.com/200';
-        }
-
-        // ✅ NAVIGASI DAN CARD
-        return GestureDetector(
-          onTap: () async {
-            // Navigasi ke Detail Resep
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => DetailResep(resep: resep),
-              ),
-            );
-            // Setelah kembali dari detail, refresh recipes (jika tab disimpan)
+        return RecipeCard(
+          recipeId: resep.id,
+          imageUrl: resep.image ?? '',
+          title: resep.title,
+          cookingTime: resep.time,
+          kategori: resep.kategori,
+          difficulty: resep.difficulty,
+          author: resep.author,
+          isSaved: widget.isSavedRecipes,
+          onSaveTapped: () async {
             if (widget.isSavedRecipes) {
-              await _fetchRecipes();
+              // Hapus dari saved recipes
+              try {
+                await api.removeSavedRecipe(resep.id);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Resep dihapus dari simpanan')),
+                );
+                await _fetchRecipes(); // Refresh list
+              } catch (e) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
+              }
             }
           },
-          child: RecipeCard(
-            imageUrl: imageUrl,
-            title: resep.title,
-            // rating: resep.rating,
-            cookingTime: resep.time,
-            kategori: resep.kategori,
-            difficulty: resep.difficulty,
-            author: resep.author,
-          ),
         );
       },
     );
   }
 }
+// class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
+//   final ApiService api = ApiService();
+//   List<RecipeModel> _recipes = [];
+//   bool _isLoading = true;
+//   String? _error;
+
+//   @override
+//   void initState() {
+//     super.initState();
+//     // Panggil fetch hanya jika userId sudah tersedia
+//     if (widget.userId != null) {
+//       _fetchRecipes();
+//     }
+//   }
+
+//   @override
+//   void didUpdateWidget(covariant _ProfileRecipeTab oldWidget) {
+//     super.didUpdateWidget(oldWidget);
+//     // Panggil fetch jika ID user baru tersedia (misal saat login selesai)
+//     if (widget.userId != oldWidget.userId && widget.userId != null) {
+//       _fetchRecipes();
+//     }
+//   }
+
+//   Future<void> _fetchRecipes() async {
+//     if (widget.userId == null || widget.userId == 0) {
+//       if (mounted) {
+//         setState(() {
+//           _recipes = [];
+//           _error = "Silakan login untuk melihat data ini.";
+//           _isLoading = false;
+//         });
+//       }
+//       return;
+//     }
+
+//     try {
+//       List<RecipeModel> fetchedData = [];
+
+//       if (widget.isSavedRecipes) {
+//         // print('DEBUG: Fetching saved recipes for user ${widget.userId}');
+//         // var savedIds = await api.fetchSavedRecipeIds(widget.userId!);
+//         /// print('DEBUG: Saved recipe IDs (server): $savedIds');
+//         print('DEBUG: Fetching saved recipes (secure endpoint)');
+//         fetchedData = await api.fetchSavedRecipes();
+//         // Selalu gabungkan dengan saved IDs lokal sebagai fallback dan "source of truth" sementara
+//         // Hal ini memastikan aksi simpan yang dilakukan secara lokal langsung terlihat di tab Profil
+//         // final prefs = await SharedPreferences.getInstance();
+//         // final localList = prefs.getStringList('local_saved_recipes') ?? [];
+//         // final localIds = localList
+//         //     .map((s) => int.tryParse(s) ?? 0)
+//         //     .where((i) => i != 0)
+//         //     .toSet();
+//         // if (localIds.isNotEmpty) {
+//         //   print('DEBUG: Saved recipe IDs (local): $localIds');
+//       } else {
+//         // ✅ LOGIKA AMAN UNTUK RESEP SAYA
+//         print('DEBUG: Fetching my own recipes (secure endpoint)');
+//         fetchedData = await api.fetchMyRecipes();
+//       }
+
+//       // Gabungkan server + lokal (lokal menang jika ada duplikasi)
+//       // savedIds = {...savedIds, ...localIds};
+//       // print('DEBUG: Saved recipe IDs (merged): $savedIds');
+
+//       // ambil detail resep berdasarkan ID
+//       // Jika fetch detail gagal, tambahkan placeholder agar item tetap terlihat di UI
+//       //   for (var id in savedIds) {
+//       //     try {
+//       //       final resep = await api.fetchSavedRecipes(id);
+//       //       if (resep != null) {
+//       //         fetchedData.add(resep);
+//       //       } else {
+//       //         // buat placeholder minimal sehingga resep yang disimpan tetap tampil
+//       //         fetchedData.add(
+//       //           RecipeModel(
+//       //             id: id,
+//       //             title: 'Resep (ID: $id)',
+//       //             kategori: '-',
+//       //             rating: '0',
+//       //             ingredients: '',
+//       //             steps: '',
+//       //             description: '',
+//       //             image: null,
+//       //             time: '',
+//       //             difficulty: '',
+//       //             author: '-',
+//       //           ),
+//       //         );
+//       //       }
+//       //     } catch (e) {
+//       //       print('DEBUG: Gagal fetch detail resep $id: $e');
+//       //       // tambahkan placeholder jika terjadi error
+//       //       fetchedData.add(
+//       //         RecipeModel(
+//       //           id: id,
+//       //           title: 'Resep (ID: $id)',
+//       //           kategori: '-',
+//       //           rating: '0',
+//       //           ingredients: '',
+//       //           steps: '',
+//       //           description: '',
+//       //           image: null,
+//       //           time: '',
+//       //           difficulty: '',
+//       //           author: '-',
+//       //         ),
+//       //       );
+//       //     }
+//       //   }
+//       // } else {
+//       //   // Ambil resep user langsung
+//       //   fetchedData = await api.fetchMyRecipes();
+//       //   // fetchedData = await api.fetchUserRecipes(widget.userId!);
+//       // }
+
+//       if (mounted) {
+//         setState(() {
+//           _recipes = fetchedData;
+//           _isLoading = false;
+//           // _error = null;
+//         });
+//       }
+//     } catch (e) {
+//       if (mounted) {
+//         setState(() {
+//           _error = e.toString();
+//           _isLoading = false;
+//         });
+//       }
+//       print('DEBUG: Error fetching recipes: $e');
+//     }
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     if (_isLoading) {
+//       return const Center(child: CircularProgressIndicator());
+//     }
+//     if (_error != null) {
+//       return Center(child: Text('Error: $_error'));
+//     }
+//     if (_recipes.isEmpty) {
+//       return Center(child: Text(widget.emptyText));
+//     }
+
+//     // Tampilan Grid untuk Resep
+//     return GridView.builder(
+//       padding: const EdgeInsets.all(16),
+//       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+//         crossAxisCount: 2,
+//         // ✅ SESUAIKAN ASPECT RATIO AGAR CARD MUAT VERTIKAL
+//         childAspectRatio: 0.7,
+//         crossAxisSpacing: 10,
+//         mainAxisSpacing: 10,
+//       ),
+//       itemCount: _recipes.length,
+//       itemBuilder: (context, index) {
+//         final resep = _recipes[index];
+
+//         // 1. Build URL Gambar
+//         String imageUrl = resep.image ?? '';
+//         if (imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
+//           // Ganti /uploads/receipes/ menjadi /uploads/recipes/ (perhatikan typo)
+//           imageUrl = '${api.baseUrl}/uploads/recipes/$imageUrl';
+//         } else if (imageUrl.isEmpty) {
+//           imageUrl = 'https://via.placeholder.com/200';
+//         }
+
+//         // ✅ NAVIGASI DAN CARD
+//         return GestureDetector(
+//           onTap: () async {
+//             // Navigasi ke Detail Resep
+//             await Navigator.push(
+//               context,
+//               MaterialPageRoute(
+//                 builder: (context) => DetailResep(resep: resep),
+//               ),
+//             );
+//             // Setelah kembali dari detail, refresh recipes (jika tab disimpan)
+//             if (widget.isSavedRecipes) {
+//               await _fetchRecipes();
+//             }
+//           },
+//           child: RecipeCard(
+//             imageUrl: imageUrl,
+//             title: resep.title,
+//             // rating: resep.rating,
+//             cookingTime: resep.time,
+//             kategori: resep.kategori,
+//             difficulty: resep.difficulty,
+//             author: resep.author,
+
+//             isSaved: widget.isSavedRecipes,
+
+//             onSaveTapped: widget.isSavedRecipes
+//                 ? () async {
+//                     try {
+//                       await api.removeSavedRecipe(resep.id);
+//                       // Tampilkan pesan sukses ke pengguna (Opsional)
+//                       ScaffoldMessenger.of(context).showSnackBar(
+//                         const SnackBar(
+//                           content: Text(
+//                             'Resep berhasil dihapus dari simpanan!',
+//                           ),
+//                         ),
+//                       );
+
+//                       // Refresh daftar untuk menghapus item yang baru saja di-unbookmark
+//                       await _fetchRecipes();
+//                     } catch (e) {
+//                       print('DEBUG: Gagal menghapus bookmark: $e');
+//                       ScaffoldMessenger.of(context).showSnackBar(
+//                         SnackBar(
+//                           content: Text(
+//                             'Gagal menghapus simpanan: ${e.toString()}',
+//                           ),
+//                         ),
+//                       );
+//                     }
+//                   }
+//                 : null,
+//           ),
+//         );
+//       },
+//     );
+//   }
+// }

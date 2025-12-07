@@ -124,7 +124,7 @@ class _HalamanResepState extends State<HalamanResep> {
         debugPrint('DEBUG: local_saved_recipes after remove: $list');
       } else {
         // Panggil API SIMPAN
-        await apiService.saveRecipe(_currentUserId);
+        await apiService.saveRecipe(recipeId);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Resep "${recipe.title}" berhasil disimpan!')),
         );
