@@ -64,6 +64,7 @@ class RecipeModel {
       image: json['image'] != null ? json['image'].toString() : null,
     );
   }
+
   factory RecipeModel.fromMealDbFilterJson(Map<String, dynamic> json) {
     return RecipeModel(
       // Kita hanya punya data minimal dari endpoint filter:
@@ -114,6 +115,26 @@ class RecipeModel {
       author: json['strArea'] ?? 'External',
       image: json['strMealThumb']?.toString(), // Ini URL gambar besar
     );
+  }
+  Map<String, dynamic> toJson() {
+    return {
+      // Saat menyimpan resep baru dari luar, ID seharusnya tidak dikirim,
+      // atau jika dikirim, back-end harus mengabaikannya dan membuat ID baru.
+      // Kita kirim data yang diambil dari TheMealDB.
+      'title': title,
+      'kategori': kategori,
+      'rating': rating,
+      'ingredients': ingredients,
+      'steps': steps,
+      'description': description,
+      // Karena image TheMealDB adalah URL penuh, kita kirimkan URL-nya.
+      // Back-end CI4 HARUS menangani penyimpanan gambar ini dan mengembalikan
+      // nama file lokalnya sebagai 'image' di RecipeModel yang baru.
+      'image': image,
+      'time': time,
+      'difficulty': difficulty,
+      'author': author, // Ini harusnya 'TheMealDB'
+    };
   }
 
   // return RecipeModel(

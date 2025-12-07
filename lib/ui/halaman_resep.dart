@@ -85,7 +85,11 @@ class _HalamanResepState extends State<HalamanResep> {
   // 👆 FUNGSI LENGKAP
 
   // 👇 FUNGSI LENGKAP: Menangani Tombol Simpan/Hapus Simpan
+
   void _handleSaveToggle(RecipeModel recipe) async {
+    final isExternal = recipe.author == 'TheMealDB';
+    int recipeId = recipe.id;
+    final isCurrentlySaved = _savedRecipeIds.contains(recipe.id);
     if (recipe.id == 0) {
       ScaffoldMessenger.of(
         context,
@@ -93,8 +97,7 @@ class _HalamanResepState extends State<HalamanResep> {
       return;
     }
 
-    final isCurrentlySaved = _savedRecipeIds.contains(recipe.id);
-    final recipeId = recipe.id;
+    //final recipeId = recipe.id;
 
     // 1. Feedback UI cepat (Optimistic Update)
     setState(() {
@@ -123,11 +126,43 @@ class _HalamanResepState extends State<HalamanResep> {
         await prefs.setStringList('local_saved_recipes', list);
         debugPrint('DEBUG: local_saved_recipes after remove: $list');
       } else {
-        // Panggil API SIMPAN
-        await apiService.saveRecipe(recipeId);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Resep "${recipe.title}" berhasil disimpan!')),
-        );
+        if (isExternal) {
+          // 2a. Jika resep eksternal, kita ambil detail lengkapnya dulu
+          final externalId = recipeId.toString(); // ID TheMealDB
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Mengambil detail resep eksternal...'),
+            ),
+          );
+          final detailedRecipe = await dbApiService.lookupMealDetail(
+            externalId,
+          );
+
+          if (detailedRecipe == null) {
+            throw Exception('Gagal mendapatkan detail resep eksternal.');
+          }
+
+          // 2b. Simpan resep lengkap ke database lokal (CI4)
+          final savedRecipe = await apiService.saveExternalRecipe(
+            detailedRecipe,
+          );
+
+          // 2c. Ganti ID resep dengan ID lokal yang baru DIBUAT
+          recipeId = savedRecipe.id;
+
+          if (mounted) {
+            setState(() {
+              _savedRecipeIds.remove(recipe.id); // Hapus ID lama (TheMealDB)
+              _savedRecipeIds.add(recipeId); // Tambahkan ID baru (CI4)
+            });
+          }
+        } else {
+          // Panggil API SIMPAN
+          await apiService.saveRecipe(recipeId);
+        }
+        // ScaffoldMessenger.of(context).showSnackBar(
+        //   SnackBar(content: Text('Resep "${recipe.title}" berhasil disimpan!')),
+
         // Simpan juga secara lokal sebagai fallback jika backend tidak expose saved list
         final prefs = await SharedPreferences.getInstance();
         final list = prefs.getStringList('local_saved_recipes') ?? [];
@@ -136,6 +171,13 @@ class _HalamanResepState extends State<HalamanResep> {
           await prefs.setStringList('local_saved_recipes', list);
         }
         debugPrint('DEBUG: local_saved_recipes after add: $list');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Resep "${recipe.title}" berhasil disimpan! (ID Baru: $recipeId)',
+            ),
+          ),
+        );
       }
     } catch (e) {
       // 3. Rollback UI jika API gagal (Pessimistic Update)

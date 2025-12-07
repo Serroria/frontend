@@ -592,7 +592,46 @@ class ApiService {
       rethrow;
     }
   }
+
   // 👇 FUNGSI BARU DIMULAI DI SINI (1/3)
+  // 👇 FUNGSI YANG DIPERBAIKI (1/3)
+  Future<RecipeModel> saveExternalRecipe(RecipeModel recipe) async {
+    try {
+      final headers = await _getAuthHeaders();
+      headers['Content-Type'] = 'application/json';
+
+      // Konversi RecipeModel ke Map
+      final body = recipe.toJson();
+
+      // Endpoint yang benar
+      final url = Uri.parse('$_baseUrl/api/resep/save-external');
+
+      print('DEBUG: Saving external recipe to: $url');
+
+      final response = await http
+          .post(url, headers: headers, body: jsonEncode(body))
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseBody = jsonDecode(response.body);
+
+        if (responseBody['status'] == true) {
+          return RecipeModel.fromJson(responseBody['data']);
+        } else {
+          throw Exception(responseBody['message'] ?? 'Gagal menyimpan resep');
+        }
+      } else if (response.statusCode == 401) {
+        throw TokenExpiredException();
+      } else {
+        throw Exception('Gagal menyimpan resep: ${response.statusCode}');
+      }
+    } on TimeoutException {
+      throw Exception('Waktu tunggu habis');
+    } catch (e) {
+      print('DEBUG: Error in saveExternalRecipe: $e');
+      rethrow;
+    }
+  }
 
   /// Menyimpan resep ke daftar favorit user (POST /resep/simpan)
   Future<void> saveRecipe(int recipeId) async {
