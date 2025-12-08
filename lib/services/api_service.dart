@@ -460,7 +460,7 @@ class ApiService {
   }
 
   Future<List<RecipeModel>> fetchFilteredLocalRecipes(String kategori) async {
-    final url = Uri.parse('$_baseUrl/resep/kategori/$kategori');
+    final url = Uri.parse('$_baseUrl/api/resep/filter/$kategori');
 
     final response = await http
         .get(url, headers: await _getAuthHeaders())
@@ -481,7 +481,7 @@ class ApiService {
     final encodedKeyword = Uri.encodeComponent(
       keyword,
     ); // Pastikan keyword di-encode
-    final url = Uri.parse('$_baseUrl/resep/search/$encodedKeyword');
+    final url = Uri.parse('$_baseUrl/api/resep/search/$encodedKeyword');
 
     final response = await http
         .get(url, headers: await _getAuthHeaders())

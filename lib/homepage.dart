@@ -192,7 +192,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     try {
-      localFiltered = await api.fetchRecipes();
+      localFiltered = await api.fetchFilteredLocalRecipes(_selectedCategory);
     } catch (e) {
       tempError = (tempError ?? '') + '\nGagal memuat resep lokal: $e';
       debugPrint(e.toString());
