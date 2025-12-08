@@ -49,7 +49,10 @@ class _TambahResepPageState extends State<TambahResepPage> {
       _timeController = TextEditingController(text: resep.time);
 
       // B. Inisialisasi Dropdown States
-      // Pastikan nilai default/lama ada di daftar _kategoriList
+      _selectedKategori = _kategoriList.contains(resep.kategori)
+          ? resep.kategori
+          : _kategoriList[0]; // Pastikan nilai default/lama ada di daftar _kategoriList
+
       _selectedKategori = resep.kategori;
       _difficulty = resep.difficulty;
 
@@ -80,9 +83,9 @@ class _TambahResepPageState extends State<TambahResepPage> {
   final List<String> _kategoriList = [
     'Nusantara',
     'Asia',
-    'Western',
-    'Vegetarian',
-    'Minuman',
+    'Internasional',
+    'Vegan',
+    'Dessert',
   ];
 
   bool _isLoading = false;

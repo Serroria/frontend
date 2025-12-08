@@ -325,6 +325,16 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
       itemCount: _recipes.length,
       itemBuilder: (context, index) {
         final resep = _recipes[index];
+        final isExternal = resep.author == 'TheMealDB';
+        String imageUrl = resep.image ?? '';
+
+        if (!isExternal &&
+            imageUrl.isNotEmpty &&
+            !imageUrl.startsWith('http')) {
+          imageUrl = '${api.baseUrl}/uploads/recipes/$imageUrl';
+        } else if (imageUrl.isEmpty) {
+          imageUrl = 'https://via.placeholder.com/200x200?text=No+Image';
+        }
 
         return GestureDetector(
           onTap: () {
@@ -338,7 +348,7 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
 
           child: RecipeCard(
             recipeId: resep.id,
-            imageUrl: resep.image ?? '',
+            imageUrl: imageUrl,
             title: resep.title,
             cookingTime: resep.time,
             kategori: resep.kategori,

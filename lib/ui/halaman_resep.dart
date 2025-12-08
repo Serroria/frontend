@@ -21,6 +21,21 @@ class _HalamanResepState extends State<HalamanResep> {
   Set<int> _savedRecipeIds = {};
   int _currentUserId = 1; // Default, akan diset dari SharedPreferences
 
+  String _getRecipeImageUrl(RecipeModel recipe) {
+    final isExternal = recipe.author == 'TheMealDB';
+    String imageUrl = recipe.image ?? '';
+
+    if (!isExternal && imageUrl.isNotEmpty && !imageUrl.startsWith('http')) {
+      // Ini adalah resep lokal, tambahkan base URL CI4
+      return '${apiService.baseUrl}/uploads/recipes/$imageUrl';
+    } else if (imageUrl.isEmpty) {
+      // Placeholder jika tidak ada gambar
+      return 'https://via.placeholder.com/200x200?text=No+Image';
+    }
+    // Jika eksternal atau sudah berupa URL lengkap
+    return imageUrl;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -330,7 +345,7 @@ class _HalamanResepState extends State<HalamanResep> {
                         }
                       },
                       child: RecipeCard(
-                        imageUrl: recipe.image ?? '',
+                        imageUrl: _getRecipeImageUrl(recipe),
                         title: recipe.title,
                         kategori: recipe.kategori,
                         // rating: recipe.rating.toString(),

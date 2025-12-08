@@ -25,9 +25,10 @@ class _HomePageState extends State<HomePage> {
   String? _error;
   String _username = "User";
 
-  String _selectedCategory = 'Dessert';
+  String _selectedCategory = 'All';
 
   final Map<String, String> _categoryMap = {
+    'All': 'Seafood',
     'Nusantara': 'Chicken',
     'Asia': 'Seafood',
     'Internasional': 'Beef',
@@ -179,20 +180,35 @@ class _HomePageState extends State<HomePage> {
       });
     }
 
-    final mealDbCategory = _categoryMap[_selectedCategory] ?? 'Dessert';
+    final mealDbCategory = _categoryMap[_selectedCategory] ?? 'Seafood';
     List<RecipeModel> recommendations = [];
     List<RecipeModel> localFiltered = [];
     String? tempError;
 
     try {
-      recommendations = await dbApi.fetchFilteredRecipes('c', mealDbCategory);
+      if (_selectedCategory == 'All') {
+        //recommendations = await dbApi.fetchPopularRecipesCI4();
+        recommendations = await dbApi.fetchFilteredRecipes(
+          'c',
+          'Random',
+        ); // Asumsi TheMealDB bisa filter 'Random'
+        // JIKA TIDAK ADA, ambil kategori default saja, misal 'Seafood'
+        recommendations = await dbApi.fetchFilteredRecipes('c', 'Seafood');
+      } else {
+        recommendations = await dbApi.fetchFilteredRecipes('c', mealDbCategory);
+      }
     } catch (e) {
       tempError = 'Gagal memuat rekomendasi TheMealDB: $e';
       debugPrint(tempError);
     }
 
     try {
-      localFiltered = await api.fetchFilteredLocalRecipes(_selectedCategory);
+      if (_selectedCategory == 'All') {
+        // ✅ LOGIC UNTUK 'ALL'
+        localFiltered = await api.fetchRecipes(); // <-- Ambil semua resep lokal
+      } else {
+        localFiltered = await api.fetchFilteredLocalRecipes(_selectedCategory);
+      }
     } catch (e) {
       tempError = (tempError ?? '') + '\nGagal memuat resep lokal: $e';
       debugPrint(e.toString());
@@ -305,6 +321,7 @@ class _HomePageState extends State<HomePage> {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
+                  _categoryItem("All", Icons.view_comfortable),
                   _categoryItem("Nusantara", Icons.ramen_dining),
                   _categoryItem("Asia", Icons.set_meal),
                   _categoryItem("Internasional", Icons.public),
@@ -363,19 +380,19 @@ class _HomePageState extends State<HomePage> {
   Widget _categoryItem(String title, IconData icon) {
     final isActive = _selectedCategory == title;
     return Padding(
-      padding: const EdgeInsets.only(right: 16),
+      padding: const EdgeInsets.only(right: 12),
       child: GestureDetector(
         onTap: () => _onCategoryTap(title),
         child: Column(
           children: [
             CircleAvatar(
-              radius: 30,
+              radius: 23,
               backgroundColor: isActive
                   ? Colors.deepOrange
                   : Colors.deepOrange.shade50,
               child: Icon(
                 icon,
-                size: 28,
+                size: 20,
                 color: isActive ? Colors.white : Colors.deepOrange,
               ),
             ),
