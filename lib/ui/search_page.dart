@@ -193,7 +193,7 @@ class _SearchPageState extends State<SearchPage> {
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2, // Dua kolom
                     childAspectRatio:
-                        0.7, // Sesuaikan rasio agar pas (tinggi lebih panjang dari lebar)
+                        0.63, // Sesuaikan rasio agar pas (tinggi lebih panjang dari lebar)
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                   ),

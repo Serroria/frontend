@@ -163,7 +163,8 @@ class RecipeCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.end, // Dorong ke kanan
                     children: [
                       Text(
-                        'Author: $author',
+                        author,
+                        // 'Author: $author',
                         style: TextStyle(fontSize: 10, color: Colors.grey[500]),
                       ),
                     ],

@@ -318,7 +318,7 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 0.7,
+        childAspectRatio: 0.63,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
@@ -326,31 +326,44 @@ class _ProfileRecipeTabState extends State<_ProfileRecipeTab> {
       itemBuilder: (context, index) {
         final resep = _recipes[index];
 
-        return RecipeCard(
-          recipeId: resep.id,
-          imageUrl: resep.image ?? '',
-          title: resep.title,
-          cookingTime: resep.time,
-          kategori: resep.kategori,
-          difficulty: resep.difficulty,
-          author: resep.author,
-          isSaved: widget.isSavedRecipes,
-          onSaveTapped: () async {
-            if (widget.isSavedRecipes) {
-              // Hapus dari saved recipes
-              try {
-                await api.removeSavedRecipe(resep.id);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Resep dihapus dari simpanan')),
-                );
-                await _fetchRecipes(); // Refresh list
-              } catch (e) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e')));
-              }
-            }
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => DetailResep(resep: resep),
+              ),
+            );
           },
+
+          child: RecipeCard(
+            recipeId: resep.id,
+            imageUrl: resep.image ?? '',
+            title: resep.title,
+            cookingTime: resep.time,
+            kategori: resep.kategori,
+            difficulty: resep.difficulty,
+            author: resep.author,
+            isSaved: widget.isSavedRecipes,
+            onSaveTapped: () async {
+              if (widget.isSavedRecipes) {
+                // Hapus dari saved recipes
+                try {
+                  await api.removeSavedRecipe(resep.id);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Resep dihapus dari simpanan'),
+                    ),
+                  );
+                  await _fetchRecipes(); // Refresh list
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Gagal menghapus: $e')),
+                  );
+                }
+              }
+            },
+          ),
         );
       },
     );
