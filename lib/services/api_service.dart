@@ -504,7 +504,7 @@ class ApiService {
     Map<String, dynamic> data, {
     File? imageFile,
   }) async {
-    final url = Uri.parse('$_baseUrl/api/resep/$id');
+    final url = Uri.parse('$_baseUrl/api/resep/update/$id');
     // final url = Uri.parse('$_baseUrl/resep/$id'); // endpoint utama
 
     try {
