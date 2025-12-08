@@ -10,6 +10,7 @@ class RecipeModel {
   final String time;
   final String difficulty;
   final String author;
+  final bool isExternal;
 
   RecipeModel({
     required this.id,
@@ -23,6 +24,7 @@ class RecipeModel {
     required this.time,
     required this.difficulty,
     required this.author,
+    this.isExternal = false,
   });
 
   factory RecipeModel.fromJson(Map<String, dynamic> json) {
@@ -62,6 +64,7 @@ class RecipeModel {
       author: json['author'] ?? '-',
       // Simpan nama file/gambar dari backend. UI akan membangun URL lengkap menggunakan ApiService.baseUrl.
       image: json['image'] != null ? json['image'].toString() : null,
+      isExternal: json['is_external'] == 1 || json['is_external'] == true,
     );
   }
 
@@ -80,6 +83,7 @@ class RecipeModel {
       time: '',
       difficulty: 'Medium',
       author: 'TheMealDB',
+      isExternal: true,
     );
   }
 
@@ -114,6 +118,7 @@ class RecipeModel {
       rating: 'N/A',
       author: json['strArea'] ?? 'External',
       image: json['strMealThumb']?.toString(), // Ini URL gambar besar
+      isExternal: true,
     );
   }
   Map<String, dynamic> toJson() {
